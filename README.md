@@ -41,6 +41,12 @@ For example,
 will yield a shapefile with coordinates into Google Web Mercator (EPSG:3857) projection. Projections can either be specified as [EPSG codes](http://spatialreference.org/ref/epsg/) or as a [proj4 string](https://en.wikipedia.org/wiki/PROJ.4):
 
     $ gtfs2shp -i google_transit.zip -f output.shp -p "+proj=somerc +lat_0=46.95240555555556 +lon_0=7.439583333333333 +k_0=1 +x_0=600000 +y_0=200000 +ellps=bessel +towgs84=674.374,15.056,405.346,0,0,0,0 +units=m +no_defs"
+
+### MOT Filtering
+
+By default, all vehicles defined in the GTFS feed will be included. You can specify which transportation types (MOTs) will be included in the output by setting the `-m` parameter to a comma separated list ot MOTs (as defined in the [GTFS ref](https://developers.google.com/transit/gtfs/reference#routes_route_type_field)). For example, to only output the rail network of Chicago, use:
+
+    $ gtfs2shp -i google_transit.zip -f output.shp -m 1,2
     
 ## Flags
 See
