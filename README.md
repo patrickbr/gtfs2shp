@@ -28,7 +28,7 @@ If you need more trip/route information, use the `-t` mode.
 
     $ gtfs2shp -i google_transit.zip -f output.shp -t
     
-An explicit geometry together with all trip/route attributes will be written for each trip. Not this will create redundant geometries.
+An explicit geometry together with all trip/route attributes will be written for each trip. Note that this will create redundant geometries.
 
 ### Coordinate reprojection
 
