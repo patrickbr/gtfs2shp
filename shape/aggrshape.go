@@ -12,42 +12,52 @@ import (
 )
 
 type AggrShape struct {
-	Shape *gtfs.Shape
-	Trips map[string]*gtfs.Trip
+	Shape  *gtfs.Shape
+	Trips  map[string]*gtfs.Trip
 	Routes map[string]*gtfs.Route
 }
 
 func NewAggrShape() *AggrShape {
 	p := AggrShape{
-		Trips:		make(map[string]*gtfs.Trip),
-		Routes:		make(map[string]*gtfs.Route),
-	};
+		Trips:  make(map[string]*gtfs.Trip),
+		Routes: make(map[string]*gtfs.Route),
+	}
 	return &p
 }
 
 func (as *AggrShape) GetTripIdsString() string {
 	keys := make([]string, 0, len(as.Trips))
-    for k := range as.Trips {
-        keys = append(keys, k)
-    }
+	for k := range as.Trips {
+		keys = append(keys, k)
+	}
 
-    return strings.Join(keys, ",");
+	return strings.Join(keys, ",")
 }
 
 func (as *AggrShape) GetRouteIdsString() string {
-	keys := make([]string, 0, len(as.Routes))
-    for k := range as.Routes {
-        keys = append(keys, k)
-    }
+	keys := make(map[string]struct{})
+	for k := range as.Routes {
+		keys[k] = struct{}{}
+	}
 
-    return strings.Join(keys, ",");
+	ids := make([]string, 0)
+	for k := range keys {
+		ids = append(ids, k)
+	}
+
+	return strings.Join(ids, ",")
 }
 
 func (as *AggrShape) GetShortNamesString() string {
-	sNames := make([]string, 0, len(as.Routes))
-    for _, v := range as.Routes {
-        sNames = append(sNames, v.Short_name)
-    }
+	sNames := make(map[string]struct{})
+	for _, v := range as.Routes {
+		sNames[v.Short_name] = struct{}{}
+	}
 
-    return strings.Join(sNames, ",");
+	sNamesSl := make([]string, 0)
+	for k := range sNames {
+		sNamesSl = append(sNamesSl, k)
+	}
+
+	return strings.Join(sNamesSl, ",")
 }
