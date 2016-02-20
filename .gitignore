@@ -1,0 +1,6 @@
+*.shp
+*.dbf
+*.shx
+*.zip
+.*
+!/.gitignore
