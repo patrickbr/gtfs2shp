@@ -12,6 +12,8 @@ import (
 	"github.com/geops/gtfsparser"
 	"github.com/patrickbr/gtfs2shp/shape"
 	"os"
+	"strconv"
+	"strings"
 )
 
 func main() {
@@ -24,6 +26,7 @@ func main() {
 	shapeFilePath := flag.String("f", "out.shp", "shapefile output file")
 	tripsExplicit := flag.Bool("t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
 	projection := flag.String("p", "4326", "output projection, either as SRID or as proj4 projection string")
+	mots := flag.String("m", "0,1,2,3,4,5,6,7", "route types (MOT) to consider, as a comma separated list (see GTFS spec)")
 
 	flag.Parse()
 
@@ -38,7 +41,7 @@ func main() {
 		}
 	}()
 
-	sw := shape.NewShapeWriter(*projection)
+	sw := shape.NewShapeWriter(*projection, getMotMap(*mots))
 
 	feed := gtfsparser.NewFeed()
 	e := feed.Parse(*gtfsPath)
@@ -48,10 +51,37 @@ func main() {
 		fmt.Fprintf(os.Stderr, e.Error())
 		os.Exit(1)
 	} else {
+		n := 0
 		if *tripsExplicit {
-			sw.WriteTripsExplicit(feed, *shapeFilePath)
+			n = sw.WriteTripsExplicit(feed, *shapeFilePath)
 		} else {
-			sw.WriteShapes(feed, *shapeFilePath)
+			n = sw.WriteShapes(feed, *shapeFilePath)
+		}
+
+		fmt.Printf("Written %d geometries.\n", n)
+	}
+}
+
+func getMotMap(motList string) map[int]bool {
+	arr := strings.Split(motList, ",")
+
+	ret := map[int]bool{
+		0: false,
+		1: false,
+		2: false,
+		3: false,
+		4: false,
+		5: false,
+		6: false,
+		7: false,
+	}
+
+	for _, a := range arr {
+		i, err := strconv.Atoi(a)
+		if err == nil && i >= 0 && i < 8 {
+			ret[i] = true
 		}
 	}
+
+	return ret
 }

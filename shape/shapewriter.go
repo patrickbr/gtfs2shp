@@ -22,13 +22,16 @@ var WGS84_STR = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 type ShapeWriter struct {
 	outProj   *proj.Proj
 	wgs84Proj *proj.Proj
+	motMap    map[int]bool
 }
 
 /**
  * Create a new ShapeWriter, writing in the specified projection (as proj4 string)
  */
-func NewShapeWriter(projection string) *ShapeWriter {
-	sw := ShapeWriter{}
+func NewShapeWriter(projection string, motMap map[int]bool) *ShapeWriter {
+	sw := ShapeWriter{
+		motMap: motMap,
+	}
 
 	/**
 	 * NOTE: go-proj-4 does not yet support pj_is_latlong(), which
@@ -87,6 +90,10 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 
 	// iterate through trips
 	for _, trip := range f.Trips {
+		if !sw.motMap[trip.Route.Type] {
+			continue
+		}
+
 		if trip.Shape != nil {
 			points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points)
 			parts := [][]shp.Point{points}
@@ -170,7 +177,7 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*Ag
 
 	// iterate through all trips
 	for _, trip := range trips {
-		if trip.Shape == nil {
+		if trip.Shape == nil || !sw.motMap[trip.Route.Type] {
 			continue
 		}
 
