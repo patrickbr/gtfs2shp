@@ -24,7 +24,11 @@ The result will look like this:
 
 ### Station geometries
 
-If you also need the station geometries, just add the `-s` flag. Station points along with all their GTFS attributes will be written into `<filename>.station.shp`.
+If you also need the station geometries, just add the `-s` flag.
+
+    $ gtfs2shp -i google_transit.zip -f output.shp -s
+
+Station points along with all their GTFS attributes will be written into `<filename>.station.shp`, in the above case to `output.station.shp`.
 
 ### Explicit trips
 
