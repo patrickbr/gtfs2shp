@@ -22,6 +22,10 @@ The result will look like this:
 
 ![Alt text](http://patrickbrosi.de/chicago.png)
 
+### Station geometries
+
+If you also need the station geometries, just add the `-s` flag. Station points along with all their GTFS attributes will be written into `<filename>.station.shp`.
+
 ### Explicit trips
 
 If you need more trip/route information, use the `-t` mode. 

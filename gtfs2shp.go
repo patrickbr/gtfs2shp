@@ -27,6 +27,7 @@ func main() {
 	tripsExplicit := flag.Bool("t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
 	projection := flag.String("p", "4326", "output projection, either as SRID or as proj4 projection string")
 	mots := flag.String("m", "0,1,2,3,4,5,6,7", "route types (MOT) to consider, as a comma separated list (see GTFS spec)")
+	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
 
 	flag.Parse()
 
@@ -52,10 +53,16 @@ func main() {
 		os.Exit(1)
 	} else {
 		n := 0
+
 		if *tripsExplicit {
-			n = sw.WriteTripsExplicit(feed, *shapeFilePath)
+			n += sw.WriteTripsExplicit(feed, *shapeFilePath)
 		} else {
-			n = sw.WriteShapes(feed, *shapeFilePath)
+			n += sw.WriteShapes(feed, *shapeFilePath)
+		}
+
+		// write stations if requested
+		if *stations {
+			n += sw.WriteStops(feed, *shapeFilePath)
 		}
 
 		fmt.Printf("Written %d geometries.\n", n)
