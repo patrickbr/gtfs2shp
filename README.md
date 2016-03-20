@@ -20,7 +20,7 @@ The primary entity will be the GTFS shapes. Routes/trips using this shapes will 
 
 The result will look like this:
 
-![Alt text](http://patrickbrosi.de/chicago.png)
+![Chicago Public Transit Network](http://patrickbrosi.de/chicago.png)
 
 ### Station geometries
 
