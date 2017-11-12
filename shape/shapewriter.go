@@ -295,7 +295,7 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 			descSize = uint8(min(254, len(st.Desc)))
 		}
 		if uint8(min(254, len(st.Zone_id))) > zoneIDSize {
-			zoneIdSize = uint8(min(254, len(st.Zone_id)))
+			zoneIDSize = uint8(min(254, len(st.Zone_id)))
 		}
 		if uint8(min(254, len(st.Url))) > urlSize {
 			urlSize = uint8(min(254, len(st.Url)))
@@ -313,7 +313,7 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 		shp.StringField("Code", codeSize),
 		shp.StringField("Name", nameSize),
 		shp.StringField("Desc", descSize),
-		shp.StringField("Zone_id", zoneIdSize),
+		shp.StringField("Zone_id", zoneIDSize),
 		shp.StringField("Url", urlSize),
 		shp.NumberField("Location_type", 1),
 		shp.StringField("Parent_station", parentStationSize),
@@ -360,7 +360,7 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 			rDescSize = uint8(min(254, len(st.Route.Desc)))
 		}
 		if uint8(min(254, len(st.Route.Url))) > rURLSize {
-			rURLSize = uint8(min(254, len(st.Route.URL)))
+			rURLSize = uint8(min(254, len(st.Route.Url)))
 		}
 		if uint8(min(254, len(st.Route.Color))) > rColorSize {
 			rColorSize = uint8(min(254, len(st.Route.Color)))
@@ -375,14 +375,14 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		shp.StringField("Headsign", headsignSize),
 		shp.StringField("ShortName", shortNameSize),
 		shp.NumberField("Dir_id", 1),
-		shp.StringField("BlockId", blockIdSize),
+		shp.StringField("BlockId", blockIDSize),
 		shp.NumberField("Wheelchr_a", 1),
 		shp.NumberField("Bikes_alwd", 1),
 		shp.StringField("R_ShrtName", rShortNameSize),
 		shp.StringField("R_LongName", rLongNameSize),
 		shp.StringField("R_Desc", rDescSize),
 		shp.NumberField("R_Type", 1),
-		shp.StringField("R_URL", rUrlSize),
+		shp.StringField("R_URL", rURLSize),
 		shp.StringField("R_Color", rColorSize),
 		shp.StringField("R_TextColor", rTextColorSize),
 	}
