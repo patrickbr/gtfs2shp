@@ -17,17 +17,16 @@ import (
 	"strings"
 )
 
-var WGS84_STR = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
+var wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 
+// ShapeWriter writes shapes to a shapefile
 type ShapeWriter struct {
 	outProj   *proj.Proj
 	wgs84Proj *proj.Proj
 	motMap    map[int]bool
 }
 
-/**
- * Create a new ShapeWriter, writing in the specified projection (as proj4 string)
- */
+// NewShapeWriter creates a new ShapeWriter, writing in the specified projection (as proj4 string)
 func NewShapeWriter(projection string, motMap map[int]bool) *ShapeWriter {
 	sw := ShapeWriter{
 		motMap: motMap,
@@ -39,13 +38,13 @@ func NewShapeWriter(projection string, motMap map[int]bool) *ShapeWriter {
 	 * latlng output. If EPSG:4326 is defined in another way than tested
 	 * here, it will reproject the coordinates to latlng in radians!
 	 */
-	if projection != "4326" && projection != WGS84_STR {
+	if projection != "4326" && projection != wgs84 {
 		// we need reprojection of coordinates
 
 		var targetProj *proj.Proj
-		wgs84, err := proj.NewProj(WGS84_STR)
+		wgs84, err := proj.NewProj(wgs84)
 		if err != nil {
-			panic(fmt.Sprintf("Could not init WGS84 projection, maybe proj4 is not available? (%s)", projection, err))
+			panic(fmt.Sprintf("Could not init WGS84 projection, maybe proj4 is not available? (%s)", err))
 		}
 
 		if _, err := strconv.Atoi(projection); err == nil {
@@ -71,10 +70,8 @@ func NewShapeWriter(projection string, motMap map[int]bool) *ShapeWriter {
 	return &sw
 }
 
-/**
- * Write the shapes contained in Feed f to outFile, with each trip as an
- * explicit geometry with all trip attributes
- */
+// WriteTripsExplicit writes the shapes contained in Feed f to outFile, with each trip as an
+// explicit geometry with all trip attributes
 func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
 
@@ -134,10 +131,8 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 	return n
 }
 
-/**
- * Write the shapes contained in Feed f to outFile, with each shape containing
- * aggregrated trip/route information
- */
+// WriteShapes writes the shapes contained in Feed f to outFile, with each shape containing
+// aggregrated trip/route information
 func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
 
@@ -169,9 +164,7 @@ func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
 	return n
 }
 
-/**
- * Write the stations contained in Feed f to outFile
- */
+// WriteStops writes the stations contained in Feed f to outFile
 func (sw *ShapeWriter) WriteStops(f *gtfsparser.Feed, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileNameStations(outFile), shp.POINT)
 
@@ -207,9 +200,7 @@ func (sw *ShapeWriter) WriteStops(f *gtfsparser.Feed, outFile string) int {
 	return n
 }
 
-/**
- * Return aggregrated shapes from GTFS trips
- */
+// return aggregrated shapes from GTFS trips
 func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*AggrShape {
 	ret := make(map[string]*AggrShape)
 
@@ -232,9 +223,7 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*Ag
 	return ret
 }
 
-/**
- * Returns a shapefile geometry from a GTFS shape, reprojected
- */
+// returns a shapefile geometry from a GTFS shape, reprojected
 func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints) []shp.Point {
 	ret := make([]shp.Point, len(gtfsshape))
 	for i, pt := range gtfsshape {
@@ -251,16 +240,13 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 	return ret
 }
 
-/**
- * Returns a shapefile geometry from a GTFS shape, reprojected
- */
+// returns a shapefile geometry from a GTFS shape, reprojected
 func (sw *ShapeWriter) gtfsStopToShpPoint(stop *gtfs.Stop) *shp.Point {
 	if sw.outProj != nil {
 		x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(stop.Lon)), proj.DegToRad(float64(stop.Lat)))
 		return &shp.Point{x, y}
-	} else {
-		return &shp.Point{float64(stop.Lon), float64(stop.Lat)}
 	}
+	return &shp.Point{float64(stop.Lon), float64(stop.Lat)}
 }
 
 /**
@@ -290,7 +276,7 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 	codeSize := uint8(0)
 	nameSize := uint8(0)
 	descSize := uint8(0)
-	zoneIdSize := uint8(0)
+	zoneIDSize := uint8(0)
 	urlSize := uint8(0)
 	parentStationSize := uint8(0)
 	timezoneSize := uint8(0)
@@ -308,7 +294,7 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 		if uint8(min(254, len(st.Desc))) > descSize {
 			descSize = uint8(min(254, len(st.Desc)))
 		}
-		if uint8(min(254, len(st.Zone_id))) > zoneIdSize {
+		if uint8(min(254, len(st.Zone_id))) > zoneIDSize {
 			zoneIdSize = uint8(min(254, len(st.Zone_id)))
 		}
 		if uint8(min(254, len(st.Url))) > urlSize {
@@ -343,11 +329,11 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 	idSize := uint8(0)
 	headsignSize := uint8(0)
 	shortNameSize := uint8(0)
-	blockIdSize := uint8(0)
+	blockIDSize := uint8(0)
 	rShortNameSize := uint8(0)
 	rLongNameSize := uint8(0)
 	rDescSize := uint8(0)
-	rUrlSize := uint8(0)
+	rURLSize := uint8(0)
 	rColorSize := uint8(0)
 	rTextColorSize := uint8(0)
 
@@ -361,8 +347,8 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Short_name))) > shortNameSize {
 			shortNameSize = uint8(min(254, len(st.Short_name)))
 		}
-		if uint8(min(254, len(st.Block_id))) > blockIdSize {
-			blockIdSize = uint8(min(254, len(st.Block_id)))
+		if uint8(min(254, len(st.Block_id))) > blockIDSize {
+			blockIDSize = uint8(min(254, len(st.Block_id)))
 		}
 		if uint8(min(254, len(st.Route.Short_name))) > rShortNameSize {
 			rShortNameSize = uint8(min(254, len(st.Route.Short_name)))
@@ -373,8 +359,8 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Route.Desc))) > rDescSize {
 			rDescSize = uint8(min(254, len(st.Route.Desc)))
 		}
-		if uint8(min(254, len(st.Route.Url))) > rUrlSize {
-			rUrlSize = uint8(min(254, len(st.Route.Url)))
+		if uint8(min(254, len(st.Route.Url))) > rURLSize {
+			rURLSize = uint8(min(254, len(st.Route.URL)))
 		}
 		if uint8(min(254, len(st.Route.Color))) > rColorSize {
 			rColorSize = uint8(min(254, len(st.Route.Color)))

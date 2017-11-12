@@ -1,3 +1,5 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/patrickbr/gtfs2shp)](https://goreportcard.com/report/github.com/patrickbr/gtfs2shp) [![Build Status](https://travis-ci.org/patrickbr/gtfs2shp.svg?branch=master)](https://travis-ci.org/patrickbr/gtfs2shp)
+
 # gtfs2shp
 
 Convert a [GTFS feed](https://developers.google.com/transit/gtfs/reference#routestxt) into an [ESRI shapefile](https://en.wikipedia.org/wiki/Shapefile).

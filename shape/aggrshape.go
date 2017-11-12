@@ -11,12 +11,16 @@ import (
 	"strings"
 )
 
+// AggrShape is a trip-aggregated shapes containing
+// gtfs.Route and gtfs.Trip objects sharing the
+// same shape
 type AggrShape struct {
 	Shape  *gtfs.Shape
 	Trips  map[string]*gtfs.Trip
 	Routes map[string]*gtfs.Route
 }
 
+// NewAggrShape returns a new AggrShape instance
 func NewAggrShape() *AggrShape {
 	p := AggrShape{
 		Trips:  make(map[string]*gtfs.Trip),
@@ -25,6 +29,8 @@ func NewAggrShape() *AggrShape {
 	return &p
 }
 
+// GetTripIdsString returns a comma separated list of
+// trip IDs contained in this AggrShape
 func (as *AggrShape) GetTripIdsString() string {
 	keys := make([]string, 0, len(as.Trips))
 	for k := range as.Trips {
@@ -34,6 +40,8 @@ func (as *AggrShape) GetTripIdsString() string {
 	return strings.Join(keys, ",")
 }
 
+// GetRouteIdsString returns a comma separated list of
+// route IDs contained in this AggrShape
 func (as *AggrShape) GetRouteIdsString() string {
 	keys := make(map[string]struct{})
 	for k := range as.Routes {
@@ -48,6 +56,8 @@ func (as *AggrShape) GetRouteIdsString() string {
 	return strings.Join(ids, ",")
 }
 
+// GetShortNamesString returns a comma separated list of
+// the short names of the routes contained in this AggrShape
 func (as *AggrShape) GetShortNamesString() string {
 	sNames := make(map[string]struct{})
 	for _, v := range as.Routes {
