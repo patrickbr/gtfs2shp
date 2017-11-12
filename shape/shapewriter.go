@@ -244,9 +244,9 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 func (sw *ShapeWriter) gtfsStopToShpPoint(stop *gtfs.Stop) *shp.Point {
 	if sw.outProj != nil {
 		x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(stop.Lon)), proj.DegToRad(float64(stop.Lat)))
-		return &shp.Point{x, y}
+		return &shp.Point{X: x, Y: y}
 	}
-	return &shp.Point{float64(stop.Lon), float64(stop.Lat)}
+	return &shp.Point{X: float64(stop.Lon), Y: float64(stop.Lat)}
 }
 
 /**
