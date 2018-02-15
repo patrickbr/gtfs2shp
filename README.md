@@ -12,6 +12,8 @@ Creation of this tool was supported by [geOps, Freiburg](http://geops.de/).
 
     $ go get github.com/patrickbr/gtfs2shp
 
+Requires golang version >= 1.7.
+
 ## Usage
 
 Convert the [Chicago GTFS file](http://www.transitchicago.com/downloads/sch_data/) to a shapefile:
