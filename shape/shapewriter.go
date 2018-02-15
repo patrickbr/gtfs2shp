@@ -8,9 +8,9 @@ package shape
 
 import (
 	"fmt"
-	"github.com/geops/gtfsparser"
-	"github.com/geops/gtfsparser/gtfs"
 	"github.com/jonas-p/go-shp"
+	"github.com/patrickbr/gtfsparser"
+	"github.com/patrickbr/gtfsparser/gtfs"
 	"github.com/pebbe/go-proj-4/proj"
 	"path/filepath"
 	"strconv"
@@ -23,11 +23,11 @@ var wgs84 = "+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs"
 type ShapeWriter struct {
 	outProj   *proj.Proj
 	wgs84Proj *proj.Proj
-	motMap    map[int]bool
+	motMap    map[int16]bool
 }
 
 // NewShapeWriter creates a new ShapeWriter, writing in the specified projection (as proj4 string)
-func NewShapeWriter(projection string, motMap map[int]bool) *ShapeWriter {
+func NewShapeWriter(projection string, motMap map[int16]bool) *ShapeWriter {
 	sw := ShapeWriter{
 		motMap: motMap,
 	}
@@ -297,14 +297,14 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 		if uint8(min(254, len(st.Zone_id))) > zoneIDSize {
 			zoneIDSize = uint8(min(254, len(st.Zone_id)))
 		}
-		if uint8(min(254, len(st.Url))) > urlSize {
-			urlSize = uint8(min(254, len(st.Url)))
+		if uint8(min(254, len(st.Url.String()))) > urlSize {
+			urlSize = uint8(min(254, len(st.Url.String())))
 		}
-		if uint8(min(254, len(st.Parent_station))) > parentStationSize {
-			parentStationSize = uint8(min(254, len(st.Parent_station)))
+		if uint8(min(254, len(st.Parent_station.Id))) > parentStationSize {
+			parentStationSize = uint8(min(254, len(st.Parent_station.Id)))
 		}
-		if uint8(min(254, len(st.Timezone))) > timezoneSize {
-			timezoneSize = uint8(min(254, len(st.Timezone)))
+		if uint8(min(254, len(st.Timezone.GetTzString()))) > timezoneSize {
+			timezoneSize = uint8(min(254, len(st.Timezone.GetTzString())))
 		}
 	}
 
@@ -359,8 +359,8 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Route.Desc))) > rDescSize {
 			rDescSize = uint8(min(254, len(st.Route.Desc)))
 		}
-		if uint8(min(254, len(st.Route.Url))) > rURLSize {
-			rURLSize = uint8(min(254, len(st.Route.Url)))
+		if uint8(min(254, len(st.Route.Url.String()))) > rURLSize {
+			rURLSize = uint8(min(254, len(st.Route.Url.String())))
 		}
 		if uint8(min(254, len(st.Route.Color))) > rColorSize {
 			rColorSize = uint8(min(254, len(st.Route.Color)))

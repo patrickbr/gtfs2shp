@@ -9,8 +9,8 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/geops/gtfsparser"
 	"github.com/patrickbr/gtfs2shp/shape"
+	"github.com/patrickbr/gtfsparser"
 	"os"
 	"strconv"
 	"strings"
@@ -69,10 +69,10 @@ func main() {
 	}
 }
 
-func getMotMap(motList string) map[int]bool {
+func getMotMap(motList string) map[int16]bool {
 	arr := strings.Split(motList, ",")
 
-	ret := map[int]bool{
+	ret := map[int16]bool{
 		0: false,
 		1: false,
 		2: false,
@@ -86,7 +86,7 @@ func getMotMap(motList string) map[int]bool {
 	for _, a := range arr {
 		i, err := strconv.Atoi(a)
 		if err == nil && i >= 0 && i < 8 {
-			ret[i] = true
+			ret[int16(i)] = true
 		}
 	}
 

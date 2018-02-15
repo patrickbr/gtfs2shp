@@ -7,7 +7,7 @@
 package shape
 
 import (
-	"github.com/geops/gtfsparser/gtfs"
+	"github.com/patrickbr/gtfsparser/gtfs"
 	"strings"
 )
 
