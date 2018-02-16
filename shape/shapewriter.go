@@ -297,10 +297,10 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 		if uint8(min(254, len(st.Zone_id))) > zoneIDSize {
 			zoneIDSize = uint8(min(254, len(st.Zone_id)))
 		}
-		if uint8(min(254, len(st.Url.String()))) > urlSize {
+		if st.Url != nil && uint8(min(254, len(st.Url.String()))) > urlSize {
 			urlSize = uint8(min(254, len(st.Url.String())))
 		}
-		if uint8(min(254, len(st.Parent_station.Id))) > parentStationSize {
+		if st.Parent_station != nil && uint8(min(254, len(st.Parent_station.Id))) > parentStationSize {
 			parentStationSize = uint8(min(254, len(st.Parent_station.Id)))
 		}
 		if uint8(min(254, len(st.Timezone.GetTzString()))) > timezoneSize {
@@ -359,7 +359,7 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Route.Desc))) > rDescSize {
 			rDescSize = uint8(min(254, len(st.Route.Desc)))
 		}
-		if uint8(min(254, len(st.Route.Url.String()))) > rURLSize {
+		if st.Route.Url != nil && uint8(min(254, len(st.Route.Url.String()))) > rURLSize {
 			rURLSize = uint8(min(254, len(st.Route.Url.String())))
 		}
 		if uint8(min(254, len(st.Route.Color))) > rColorSize {
