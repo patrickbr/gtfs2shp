@@ -359,7 +359,7 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Route.Desc))) > rDescSize {
 			rDescSize = uint8(min(254, len(st.Route.Desc)))
 		}
-		if st.Route.Url != nil && uint8(min(254, len(st.Route.Url.String()))) > rURLSize {
+		if st.Route.Url != nil && (uint8(min(254, len(st.Route.Url.String()))) > rURLSize) {
 			rURLSize = uint8(min(254, len(st.Route.Url.String())))
 		}
 		if uint8(min(254, len(st.Route.Color))) > rColorSize {
