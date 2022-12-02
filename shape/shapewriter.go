@@ -341,8 +341,8 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(st.Id))) > idSize {
 			idSize = uint8(min(254, len(st.Id)))
 		}
-		if uint8(min(254, len(st.Headsign))) > headsignSize {
-			headsignSize = uint8(min(254, len(st.Headsign)))
+		if uint8(min(254, len(*st.Headsign))) > headsignSize {
+			headsignSize = uint8(min(254, len(*st.Headsign)))
 		}
 		if uint8(min(254, len(st.Short_name))) > shortNameSize {
 			shortNameSize = uint8(min(254, len(st.Short_name)))
