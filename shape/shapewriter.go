@@ -381,7 +381,7 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		shp.StringField("R_ShrtName", rShortNameSize),
 		shp.StringField("R_LongName", rLongNameSize),
 		shp.StringField("R_Desc", rDescSize),
-		shp.NumberField("R_Type", 1),
+		shp.NumberField("R_Type", 16),
 		shp.StringField("R_URL", rURLSize),
 		shp.StringField("R_Color", rColorSize),
 		shp.StringField("R_TextColor", rTextColorSize),
