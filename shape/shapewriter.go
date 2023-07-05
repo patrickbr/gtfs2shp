@@ -256,12 +256,12 @@ func (sw *ShapeWriter) gtfsStationPointsToShpLinePoints(stoptimes gtfs.StopTimes
 	ret := make([]shp.Point, len(stoptimes))
 	for i, st := range stoptimes {
 		if sw.outProj != nil {
-			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(st.Stop.Lon)), proj.DegToRad(float64(st.Stop.Lat)))
+			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(st.Stop().Lon)), proj.DegToRad(float64(st.Stop().Lat)))
 			ret[i].Y = y
 			ret[i].X = x
 		} else {
-			ret[i].Y = float64(st.Stop.Lat)
-			ret[i].X = float64(st.Stop.Lon)
+			ret[i].Y = float64(st.Stop().Lat)
+			ret[i].X = float64(st.Stop().Lon)
 		}
 	}
 
