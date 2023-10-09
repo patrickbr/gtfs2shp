@@ -15,16 +15,20 @@ import (
 // gtfs.Route and gtfs.Trip objects sharing the
 // same shape
 type AggrShape struct {
-	Shape  *gtfs.Shape
-	Trips  map[string]*gtfs.Trip
-	Routes map[string]*gtfs.Route
+	Shape          *gtfs.Shape
+	Trips          map[string]*gtfs.Trip
+	Routes         map[string]*gtfs.Route
+	RouteTripCount map[*gtfs.Route]int
+	MeterLength    float64
 }
 
 // NewAggrShape returns a new AggrShape instance
 func NewAggrShape() *AggrShape {
 	p := AggrShape{
-		Trips:  make(map[string]*gtfs.Trip),
-		Routes: make(map[string]*gtfs.Route),
+		Trips:          make(map[string]*gtfs.Trip),
+		Routes:         make(map[string]*gtfs.Route),
+		RouteTripCount: make(map[*gtfs.Route]int),
+		MeterLength:    0,
 	}
 	return &p
 }

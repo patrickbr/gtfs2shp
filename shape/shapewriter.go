@@ -11,7 +11,8 @@ import (
 	"github.com/jonas-p/go-shp"
 	"github.com/patrickbr/gtfsparser"
 	"github.com/patrickbr/gtfsparser/gtfs"
-	"github.com/pebbe/go-proj-4/proj"
+	"github.com/pebbe/go-proj-4/proj/v5"
+	"math"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -131,6 +132,50 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 	return n
 }
 
+func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]string, outFile string) int {
+	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
+
+	if err != nil {
+		panic(fmt.Sprintf("Could not open shapefile for writing (%s)", err))
+	}
+	defer shape.Close()
+
+	n := 0
+
+	// get aggreshape map
+	aggrShapes := sw.getAggrShapes(f.Trips)
+	shape.SetFields(sw.getFieldSizesForRouteShapes(aggrShapes, typeMap))
+
+	for _, aggrShape := range aggrShapes {
+		points := sw.gtfsShapePointsToShpLinePoints(aggrShape.Shape.Points)
+		parts := [][]shp.Point{points}
+
+		for _, r := range aggrShape.Routes {
+			shape.Write(shp.NewPolyLine(parts))
+
+			shape.WriteAttribute(n, 0, r.Id)
+			shape.WriteAttribute(n, 1, r.Short_name)
+			shape.WriteAttribute(n, 2, r.Long_name)
+			if str, ok := typeMap[r.Type]; ok {
+				shape.WriteAttribute(n, 3, str)
+			} else {
+				shape.WriteAttribute(n, 3, strconv.FormatInt(int64(r.Type), 10))
+			}
+			shape.WriteAttribute(n, 4, r.Agency.Name)
+
+			// number of trips
+			shape.WriteAttribute(n, 5, aggrShape.RouteTripCount[r])
+
+			// length in m
+			shape.WriteAttribute(n, 6, aggrShape.MeterLength)
+
+			n = n + 1
+		}
+	}
+
+	return n
+}
+
 // WriteShapes writes the shapes contained in Feed f to outFile, with each shape containing
 // aggregrated trip/route information
 func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
@@ -214,10 +259,32 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*Ag
 		if _, ok := ret[trip.Shape.Id]; !ok {
 			ret[trip.Shape.Id] = NewAggrShape()
 			ret[trip.Shape.Id].Shape = trip.Shape
+
+			mlen := 0.0
+
+			for i := 1; i < len(trip.Shape.Points); i++ {
+				mlen += haversineP(trip.Shape.Points[i-1], trip.Shape.Points[i])
+			}
+
+			ret[trip.Shape.Id].MeterLength = mlen
 		}
 
 		ret[trip.Shape.Id].Trips[trip.Id] = trip
 		ret[trip.Shape.Id].Routes[trip.Route.Id] = trip.Route
+
+		if _, ok := ret[trip.Shape.Id].RouteTripCount[trip.Route]; !ok {
+			ret[trip.Shape.Id].RouteTripCount[trip.Route] = 0
+		}
+
+		start := trip.Service.GetFirstActiveDate()
+		end := trip.Service.GetLastActiveDate()
+		endT := end.GetTime()
+
+		for d := start; !d.GetTime().After(endT); d = d.GetOffsettedDate(1) {
+			if trip.Service.IsActiveOn(d) {
+				ret[trip.Shape.Id].RouteTripCount[trip.Route] += 1
+			}
+		}
 	}
 
 	return ret
@@ -344,10 +411,10 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		if uint8(min(254, len(*st.Headsign))) > headsignSize {
 			headsignSize = uint8(min(254, len(*st.Headsign)))
 		}
-		if uint8(min(254, len(*st.Short_name))) > shortNameSize {
+		if st.Short_name != nil && uint8(min(254, len(*st.Short_name))) > shortNameSize {
 			shortNameSize = uint8(min(254, len(*st.Short_name)))
 		}
-		if uint8(min(254, len(*st.Block_id))) > blockIDSize {
+		if st.Block_id != nil && uint8(min(254, len(*st.Block_id))) > blockIDSize {
 			blockIDSize = uint8(min(254, len(*st.Block_id)))
 		}
 		if uint8(min(254, len(st.Route.Short_name))) > rShortNameSize {
@@ -421,6 +488,54 @@ func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []sh
 }
 
 /**
+ * Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
+ */
+func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string) []shp.Field {
+	idSize := uint8(0)
+	shortNameSize := uint8(0)
+	LongNameSize := uint8(0)
+	TypeNameSize := uint8(0)
+	AgencyNameSize := uint8(0)
+
+	for _, s := range shapes {
+		for _, r := range s.Routes {
+			if uint8(min(254, len(r.Id))) > idSize {
+				idSize = uint8(min(254, len(r.Id)))
+			}
+			if uint8(min(254, len(r.Short_name))) > shortNameSize {
+				shortNameSize = uint8(min(254, len(r.Short_name)))
+			}
+			if uint8(min(254, len(r.Long_name))) > LongNameSize {
+				LongNameSize = uint8(min(254, len(r.Long_name)))
+			}
+			if str, ok := typeMap[r.Type]; ok {
+				if uint8(min(254, len(str))) > TypeNameSize {
+					TypeNameSize = uint8(min(254, len(str)))
+				}
+			} else {
+				istr := strconv.FormatInt(int64(r.Type), 10)
+				if uint8(min(254, len(istr))) > TypeNameSize {
+					TypeNameSize = uint8(min(254, len(istr)))
+				}
+			}
+			if uint8(min(254, len(r.Agency.Name))) > AgencyNameSize {
+				AgencyNameSize = uint8(min(254, len(r.Agency.Name)))
+			}
+		}
+	}
+
+	return []shp.Field{
+		shp.StringField("Id", idSize),
+		shp.StringField("Short_name", shortNameSize),
+		shp.StringField("Long_name", LongNameSize),
+		shp.StringField("Type_name", TypeNameSize),
+		shp.StringField("Agency_name", AgencyNameSize),
+		shp.NumberField("Frequency", 32),
+		shp.FloatField("Meter_length", 32, 10),
+	}
+}
+
+/**
  * Return the sanitized output file name from the user-provided output file
  */
 func (sw *ShapeWriter) getShapeFileName(in string) string {
@@ -447,4 +562,42 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+var DEG_TO_RAD float64 = 0.017453292519943295769236907684886127134428718885417254560
+var DEG_TO_RAD32 float32 = float32(DEG_TO_RAD)
+
+// Convert latitude/longitude to web mercator coordinates
+func latLngToWebMerc(lat float32, lng float32) (float64, float64) {
+	x := 6378137.0 * lng * DEG_TO_RAD32
+	a := float64(lat * DEG_TO_RAD32)
+
+	lng = x
+	lat = float32(3189068.5 * math.Log((1.0+math.Sin(a))/(1.0-math.Sin(a))))
+	return float64(lng), float64(lat)
+}
+
+// Calculate the distance in meter between two lat,lng pairs
+func haversine(latA float64, lonA float64, latB float64, lonB float64) float64 {
+	latA = latA * DEG_TO_RAD
+	lonA = lonA * DEG_TO_RAD
+	latB = latB * DEG_TO_RAD
+	lonB = lonB * DEG_TO_RAD
+
+	dlat := latB - latA
+	dlon := lonB - lonA
+
+	sindlat := math.Sin(dlat / 2)
+	sindlon := math.Sin(dlon / 2)
+
+	a := sindlat*sindlat + math.Cos(latA)*math.Cos(latB)*sindlon*sindlon
+
+	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+
+	return c * 6378137.0
+}
+
+// Calculate the distance between two ShapePoints
+func haversineP(a gtfs.ShapePoint, b gtfs.ShapePoint) float64 {
+	return haversine(float64(a.Lat), float64(a.Lon), float64(b.Lat), float64(b.Lon))
 }

@@ -22,18 +22,43 @@ func main() {
 		flag.PrintDefaults()
 	}
 
+	routeTypeMapping := make(map[int16]string, 0)
+
 	gtfsPath := flag.String("i", "", "gtfs input path, zip or directory")
 	shapeFilePath := flag.String("f", "out.shp", "shapefile output file")
 	tripsExplicit := flag.Bool("t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
+	perRoute := flag.Bool("r", false, "output shapes per route")
 	projection := flag.String("p", "4326", "output projection, either as SRID or as proj4 projection string")
 	mots := flag.String("m", "0,1,2,3,4,5,6,7", "route types (MOT) to consider, as a comma separated list (see GTFS spec)")
 	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
+	routeTypeNameMapping := flag.String("route-type-mapping", "", "semicolon-separated list of mapping of {route_type}:{string} to be used on output")
 
 	flag.Parse()
 
 	if len(*gtfsPath) == 0 {
 		fmt.Fprintln(os.Stderr, "No GTFS location specified, see --help")
 		os.Exit(1)
+	}
+
+	for _, pairs := range strings.Split(*routeTypeNameMapping, ";") {
+		if len(pairs) == 0 {
+			continue
+		}
+		tupl := strings.SplitN(pairs, ":", 2)
+
+		if len(tupl) != 2 {
+			fmt.Println("Could not read mapping tuple", pairs)
+			os.Exit(1)
+		}
+
+		mot, e := strconv.Atoi(tupl[0])
+
+		if e != nil {
+			fmt.Println(e)
+			os.Exit(1)
+		}
+
+		routeTypeMapping[int16(mot)] = tupl[1]
 	}
 
 	defer func() {
@@ -56,6 +81,8 @@ func main() {
 
 		if *tripsExplicit {
 			n += sw.WriteTripsExplicit(feed, *shapeFilePath)
+		} else if *perRoute {
+			n += sw.WriteRouteShapes(feed, routeTypeMapping, *shapeFilePath)
 		} else {
 			n += sw.WriteShapes(feed, *shapeFilePath)
 		}
