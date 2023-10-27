@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"github.com/patrickbr/gtfs2shp/shape"
 	"github.com/patrickbr/gtfsparser"
+	gtfs "github.com/patrickbr/gtfsparser/gtfs"
 	"os"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ func main() {
 	}
 
 	routeTypeMapping := make(map[int16]string, 0)
+	routeAddFlds := make(map[string]bool, 0)
 
 	gtfsPath := flag.String("i", "", "gtfs input path, zip or directory")
 	shapeFilePath := flag.String("f", "out.shp", "shapefile output file")
@@ -32,6 +34,8 @@ func main() {
 	mots := flag.String("m", "0,1,2,3,4,5,6,7", "route types (MOT) to consider, as a comma separated list (see GTFS spec)")
 	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
 	routeTypeNameMapping := flag.String("route-type-mapping", "", "semicolon-separated list of mapping of {route_type}:{string} to be used on output")
+	writeAddRouteFlds := flag.String("write-add-route-fields", "", "semicolon-separated list of additional route fields to be included in output")
+	writeRouteOverviewCsv := flag.Bool("write-route-overview-csv", false, "write a route overview CSV")
 
 	flag.Parse()
 
@@ -61,6 +65,14 @@ func main() {
 		routeTypeMapping[int16(mot)] = tupl[1]
 	}
 
+	for _, field := range strings.Split(*writeAddRouteFlds, ";") {
+		if len(field) == 0 {
+			continue
+		}
+
+		routeAddFlds[field] = true
+	}
+
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Error:", r)
@@ -70,6 +82,7 @@ func main() {
 	sw := shape.NewShapeWriter(*projection, getMotMap(*mots))
 
 	feed := gtfsparser.NewFeed()
+	feed.SetParseOpts(gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), false})
 	e := feed.Parse(*gtfsPath)
 
 	if e != nil {
@@ -82,9 +95,13 @@ func main() {
 		if *tripsExplicit {
 			n += sw.WriteTripsExplicit(feed, *shapeFilePath)
 		} else if *perRoute {
-			n += sw.WriteRouteShapes(feed, routeTypeMapping, *shapeFilePath)
+			n += sw.WriteRouteShapes(feed, routeTypeMapping, routeAddFlds, *shapeFilePath)
 		} else {
 			n += sw.WriteShapes(feed, *shapeFilePath)
+		}
+
+		if *writeRouteOverviewCsv {
+			sw.WriteRouteOverviewCsv(feed, routeTypeMapping, routeAddFlds, *shapeFilePath)
 		}
 
 		// write stations if requested

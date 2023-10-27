@@ -7,12 +7,14 @@
 package shape
 
 import (
+	"encoding/csv"
 	"fmt"
 	"github.com/jonas-p/go-shp"
 	"github.com/patrickbr/gtfsparser"
 	"github.com/patrickbr/gtfsparser/gtfs"
 	"github.com/pebbe/go-proj-4/proj/v5"
 	"math"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -25,6 +27,11 @@ type ShapeWriter struct {
 	outProj   *proj.Proj
 	wgs84Proj *proj.Proj
 	motMap    map[int16]bool
+}
+
+type RouteStats struct {
+	TotLength float64
+	TotFreq   int
 }
 
 // NewShapeWriter creates a new ShapeWriter, writing in the specified projection (as proj4 string)
@@ -93,7 +100,13 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 		}
 
 		if trip.Shape != nil {
-			points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points)
+			from := math.NaN()
+			to := math.NaN()
+			if len(trip.StopTimes) > 0 {
+				from = float64(trip.StopTimes[0].Shape_dist_traveled())
+				to = float64(trip.StopTimes[len(trip.StopTimes)-1].Shape_dist_traveled())
+			}
+			points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points, from, to)
 			parts := [][]shp.Point{points}
 
 			// prevent re-calcing of polylines for each trips
@@ -132,7 +145,70 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 	return n
 }
 
-func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]string, outFile string) int {
+func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds map[string]bool, outFile string) {
+	csvFile, err := os.Create("out.csv")
+
+	if err != nil {
+		panic(fmt.Sprintf("Could not open CSV file for writing (%s)", err))
+	}
+
+	csvwriter := csv.NewWriter(csvFile)
+
+	headers := []string{"Route_id", "Short_name", "Long_name", "Type", "Frequency", "Meter_len", "Meter_tot", "Agency_name", "Agency_url", "Wchair_tr", "Wchair_st"}
+
+	for field, _ := range routeAddFlds {
+		headers = append(headers, field)
+	}
+
+	csvwriter.Write(headers)
+
+	aggrShapes, routeShapes := sw.getAggrShapes(f.Trips)
+
+	for route, shapes := range routeShapes {
+		vals := []string{route.Id, route.Short_name, route.Long_name}
+
+		if str, ok := typeMap[route.Type]; ok {
+			vals = append(vals, str)
+		} else {
+			vals = append(vals, strconv.FormatInt(int64(route.Type), 10))
+		}
+
+		totFreq := 0
+		totMeterLength := 0.0
+		wheelchairTripsTot := 0
+		wheelchairStopsTot := 0
+		numStopsTot := 0
+
+		for s, _ := range shapes {
+			aggrShp := aggrShapes[s]
+			totFreq += aggrShp.RouteTripCount[route]
+			totMeterLength += aggrShp.MeterLength * float64(aggrShp.RouteTripCount[route])
+			wheelchairTripsTot += aggrShp.WheelchairAccessibleTrips[route]
+			wheelchairStopsTot += aggrShp.WheelchairAccessibleStops[route]
+			numStopsTot += aggrShp.NumStops[route]
+		}
+
+		vals = append(vals, strconv.FormatInt(int64(totFreq), 10))
+		vals = append(vals, strconv.FormatFloat(float64(totMeterLength)/float64(totFreq), 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(totMeterLength, 'f', 4, 64))
+		vals = append(vals, route.Agency.Name)
+		if route.Agency.Url != nil {
+			vals = append(vals, route.Agency.Url.String())
+		} else {
+			vals = append(vals, "")
+		}
+
+		vals = append(vals, strconv.FormatFloat(float64(wheelchairTripsTot)/float64(totFreq), 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(float64(wheelchairStopsTot)/float64(numStopsTot), 'f', 4, 64))
+
+		csvwriter.Write(vals)
+	}
+
+	csvwriter.Flush()
+	csvFile.Close()
+}
+
+func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds map[string]bool, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
 
 	if err != nil {
@@ -143,11 +219,12 @@ func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]st
 	n := 0
 
 	// get aggreshape map
-	aggrShapes := sw.getAggrShapes(f.Trips)
-	shape.SetFields(sw.getFieldSizesForRouteShapes(aggrShapes, typeMap))
+	// aggrShapes, routeStats := sw.getAggrShapes(f.Trips)
+	aggrShapes, _ := sw.getAggrShapes(f.Trips)
+	shape.SetFields(sw.getFieldSizesForRouteShapes(aggrShapes, typeMap, routeAddFlds, f))
 
 	for _, aggrShape := range aggrShapes {
-		points := sw.gtfsShapePointsToShpLinePoints(aggrShape.Shape.Points)
+		points := sw.gtfsShapePointsToShpLinePoints(aggrShape.Shape.Points, aggrShape.From, aggrShape.To)
 		parts := [][]shp.Point{points}
 
 		for _, r := range aggrShape.Routes {
@@ -161,13 +238,42 @@ func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]st
 			} else {
 				shape.WriteAttribute(n, 3, strconv.FormatInt(int64(r.Type), 10))
 			}
-			shape.WriteAttribute(n, 4, r.Agency.Name)
 
 			// number of trips
-			shape.WriteAttribute(n, 5, aggrShape.RouteTripCount[r])
+			shape.WriteAttribute(n, 4, aggrShape.RouteTripCount[r])
 
 			// length in m
-			shape.WriteAttribute(n, 6, aggrShape.MeterLength)
+			shape.WriteAttribute(n, 5, aggrShape.MeterLength)
+
+			// route tot travelled
+			shape.WriteAttribute(n, 6, float64(aggrShape.RouteTripCount[r])*aggrShape.MeterLength)
+
+			// agency name
+			shape.WriteAttribute(n, 7, r.Agency.Name)
+
+			// agency url
+			shape.WriteAttribute(n, 8, r.Agency.Url.String())
+
+			// wheelchair trips
+			shape.WriteAttribute(n, 9, float64(aggrShape.WheelchairAccessibleTrips[r])/float64(aggrShape.RouteTripCount[r]))
+
+			// wheelchair stops
+			shape.WriteAttribute(n, 10, float64(aggrShape.WheelchairAccessibleStops[r])/float64(aggrShape.NumStops[r]))
+
+			i := 11
+
+			for field, _ := range routeAddFlds {
+				if flds, ok := f.RoutesAddFlds[field]; ok {
+					if val, ok := flds[r.Id]; ok {
+						shape.WriteAttribute(n, i, val)
+					} else {
+						shape.WriteAttribute(n, i, "")
+					}
+				} else {
+					shape.WriteAttribute(n, i, "")
+				}
+				i += 1
+			}
 
 			n = n + 1
 		}
@@ -189,11 +295,11 @@ func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
 	n := 0
 
 	// get aggreshape map
-	aggrShapes := sw.getAggrShapes(f.Trips)
+	aggrShapes, _ := sw.getAggrShapes(f.Trips)
 	shape.SetFields(sw.getFieldSizesForShapes(aggrShapes))
 
 	for _, aggrShape := range aggrShapes {
-		points := sw.gtfsShapePointsToShpLinePoints(aggrShape.Shape.Points)
+		points := sw.gtfsShapePointsToShpLinePoints(aggrShape.Shape.Points, aggrShape.From, aggrShape.To)
 		parts := [][]shp.Point{points}
 
 		shape.Write(shp.NewPolyLine(parts))
@@ -246,8 +352,9 @@ func (sw *ShapeWriter) WriteStops(f *gtfsparser.Feed, outFile string) int {
 }
 
 // return aggregrated shapes from GTFS trips
-func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*AggrShape {
+func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*AggrShape, map[*gtfs.Route]map[string]bool) {
 	ret := make(map[string]*AggrShape)
+	routeShapes := make(map[*gtfs.Route]map[string]bool)
 
 	// iterate through all trips
 	for _, trip := range trips {
@@ -255,25 +362,47 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*Ag
 			continue
 		}
 
-		// check if shape is already present
-		if _, ok := ret[trip.Shape.Id]; !ok {
-			ret[trip.Shape.Id] = NewAggrShape()
-			ret[trip.Shape.Id].Shape = trip.Shape
+		aggrShapeId := trip.Shape.Id
 
-			mlen := 0.0
-
-			for i := 1; i < len(trip.Shape.Points); i++ {
-				mlen += haversineP(trip.Shape.Points[i-1], trip.Shape.Points[i])
-			}
-
-			ret[trip.Shape.Id].MeterLength = mlen
+		if trip.StopTimes[0].HasDistanceTraveled() && trip.StopTimes[len(trip.StopTimes)-1].HasDistanceTraveled() {
+			from := strconv.FormatFloat(float64(trip.StopTimes[0].Shape_dist_traveled()), 'f', 1, 64)
+			to := strconv.FormatFloat(float64(trip.StopTimes[len(trip.StopTimes)-1].Shape_dist_traveled()), 'f', 1, 64)
+			aggrShapeId += "%%%%%" + from + ":" + to
 		}
 
-		ret[trip.Shape.Id].Trips[trip.Id] = trip
-		ret[trip.Shape.Id].Routes[trip.Route.Id] = trip.Route
+		if _, ok := routeShapes[trip.Route]; !ok {
+			routeShapes[trip.Route] = make(map[string]bool)
+		}
 
-		if _, ok := ret[trip.Shape.Id].RouteTripCount[trip.Route]; !ok {
-			ret[trip.Shape.Id].RouteTripCount[trip.Route] = 0
+		routeShapes[trip.Route][aggrShapeId] = true
+
+		// check if shape is already present
+		if _, ok := ret[aggrShapeId]; !ok {
+			ret[aggrShapeId] = NewAggrShape()
+			ret[aggrShapeId].Shape = trip.Shape
+			ret[aggrShapeId].From = float64(trip.StopTimes[0].Shape_dist_traveled())
+			ret[aggrShapeId].To = float64(trip.StopTimes[len(trip.StopTimes)-1].Shape_dist_traveled())
+
+			ret[aggrShapeId].CalcMeterLength()
+		}
+
+		ret[aggrShapeId].Trips[trip.Id] = trip
+		ret[aggrShapeId].Routes[trip.Route.Id] = trip.Route
+
+		if _, ok := ret[aggrShapeId].WheelchairAccessibleTrips[trip.Route]; !ok {
+			ret[aggrShapeId].WheelchairAccessibleTrips[trip.Route] = 0
+		}
+
+		if _, ok := ret[aggrShapeId].WheelchairAccessibleStops[trip.Route]; !ok {
+			ret[aggrShapeId].WheelchairAccessibleStops[trip.Route] = 0
+		}
+
+		if _, ok := ret[aggrShapeId].NumStops[trip.Route]; !ok {
+			ret[aggrShapeId].NumStops[trip.Route] = 0
+		}
+
+		if _, ok := ret[aggrShapeId].RouteTripCount[trip.Route]; !ok {
+			ret[aggrShapeId].RouteTripCount[trip.Route] = 0
 		}
 
 		start := trip.Service.GetFirstActiveDate()
@@ -282,25 +411,95 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) map[string]*Ag
 
 		for d := start; !d.GetTime().After(endT); d = d.GetOffsettedDate(1) {
 			if trip.Service.IsActiveOn(d) {
-				ret[trip.Shape.Id].RouteTripCount[trip.Route] += 1
+				ret[aggrShapeId].RouteTripCount[trip.Route] += 1
+				ret[aggrShapeId].NumStops[trip.Route] += len(trip.StopTimes)
+
+				if trip.Wheelchair_accessible == 1 {
+					ret[aggrShapeId].WheelchairAccessibleTrips[trip.Route] += 1
+				}
+
+				for _, st := range trip.StopTimes {
+					if st.Stop().Wheelchair_boarding == 1 || (st.Stop().Parent_station != nil && st.Stop().Parent_station.Wheelchair_boarding == 1) {
+						ret[aggrShapeId].WheelchairAccessibleStops[trip.Route] += 1
+					}
+				}
 			}
 		}
 	}
 
-	return ret
+	return ret, routeShapes
 }
 
 // returns a shapefile geometry from a GTFS shape, reprojected
-func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints) []shp.Point {
-	ret := make([]shp.Point, len(gtfsshape))
-	for i, pt := range gtfsshape {
+func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints, from float64, to float64) []shp.Point {
+	first := 0
+	last := len(gtfsshape) - 1
+
+	haveFirst := false
+
+	ret := make([]shp.Point, 0)
+
+	if !math.IsNaN(from) && !math.IsNaN(to) {
+		for i := 0; i < len(gtfsshape); i++ {
+			if math.IsNaN(float64(gtfsshape[i].Dist_traveled)) {
+				first = 0
+				last = len(gtfsshape) - 1
+				break
+			}
+
+			if !haveFirst && float64(gtfsshape[i].Dist_traveled) >= from {
+				first = i
+				haveFirst = true
+			}
+
+			if haveFirst && float64(gtfsshape[i].Dist_traveled) > to {
+				last = i - 1
+			}
+		}
+	}
+
+	if first > 0 {
+		latdiff := gtfsshape[first].Lat - gtfsshape[first-1].Lat
+		londiff := gtfsshape[first].Lon - gtfsshape[first-1].Lon
+
+		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
+		dMeasure := gtfsshape[first].Dist_traveled - gtfsshape[first-1].Dist_traveled
+
+		lat := gtfsshape[first-1].Lat + latdiff*d/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
+		lon := gtfsshape[first-1].Lon + latdiff*d/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
+
 		if sw.outProj != nil {
-			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(pt.Lon)), proj.DegToRad(float64(pt.Lat)))
-			ret[i].Y = y
-			ret[i].X = x
+			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))
+			ret = append(ret, shp.Point{x, y})
 		} else {
-			ret[i].Y = float64(pt.Lat)
-			ret[i].X = float64(pt.Lon)
+			ret = append(ret, shp.Point{float64(lon), float64(lat)})
+		}
+	}
+
+	for i := first; i <= last; i++ {
+		if sw.outProj != nil {
+			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(gtfsshape[i].Lon)), proj.DegToRad(float64(gtfsshape[i].Lat)))
+			ret = append(ret, shp.Point{x, y})
+		} else {
+			ret = append(ret, shp.Point{float64(gtfsshape[i].Lon), float64(gtfsshape[i].Lat)})
+		}
+	}
+
+	if last < len(gtfsshape)-1 {
+		latdiff := gtfsshape[last+1].Lat - gtfsshape[last].Lat
+		londiff := gtfsshape[last+1].Lon - gtfsshape[last].Lon
+
+		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
+		dMeasure := gtfsshape[last+1].Dist_traveled - gtfsshape[last].Dist_traveled
+
+		lat := gtfsshape[last].Lat + latdiff*d/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
+		lon := gtfsshape[last].Lon + latdiff*d/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
+
+		if sw.outProj != nil {
+			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))
+			ret = append(ret, shp.Point{x, y})
+		} else {
+			ret = append(ret, shp.Point{float64(lon), float64(lat)})
 		}
 	}
 
@@ -490,12 +689,15 @@ func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []sh
 /**
  * Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
  */
-func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string) []shp.Field {
+func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string, routeAddFlds map[string]bool, f *gtfsparser.Feed) []shp.Field {
 	idSize := uint8(0)
 	shortNameSize := uint8(0)
 	LongNameSize := uint8(0)
 	TypeNameSize := uint8(0)
 	AgencyNameSize := uint8(0)
+	AgencyUrlSize := uint8(0)
+
+	addFldsSizes := make(map[string]uint8, len(routeAddFlds))
 
 	for _, s := range shapes {
 		for _, r := range s.Routes {
@@ -521,18 +723,41 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 			if uint8(min(254, len(r.Agency.Name))) > AgencyNameSize {
 				AgencyNameSize = uint8(min(254, len(r.Agency.Name)))
 			}
+			if uint8(min(254, len(r.Agency.Url.String()))) > AgencyNameSize {
+				AgencyUrlSize = uint8(min(254, len(r.Agency.Url.String())))
+			}
+
+			for field, _ := range routeAddFlds {
+				if flds, ok := f.RoutesAddFlds[field]; ok {
+					if val, ok := flds[r.Id]; ok {
+						if uint8(min(254, len(val))) > addFldsSizes[field] {
+							addFldsSizes[field] = uint8(min(254, len(val)))
+						}
+					}
+				}
+			}
 		}
 	}
 
-	return []shp.Field{
-		shp.StringField("Id", idSize),
+	flds := []shp.Field{
+		shp.StringField("Route_id", idSize),
 		shp.StringField("Short_name", shortNameSize),
 		shp.StringField("Long_name", LongNameSize),
-		shp.StringField("Type_name", TypeNameSize),
-		shp.StringField("Agency_name", AgencyNameSize),
+		shp.StringField("Type", TypeNameSize),
 		shp.NumberField("Frequency", 32),
-		shp.FloatField("Meter_length", 32, 10),
+		shp.FloatField("Meter_len", 32, 10),
+		shp.FloatField("Meter_tot", 32, 10),
+		shp.StringField("Agency_name", AgencyNameSize),
+		shp.StringField("Agency_url", AgencyUrlSize),
+		shp.FloatField("Wchair_tr", 32, 10),
+		shp.FloatField("Wchair_st", 32, 10),
 	}
+
+	for field, _ := range routeAddFlds {
+		flds = append(flds, shp.StringField(field, addFldsSizes[field]))
+	}
+
+	return flds
 }
 
 /**
@@ -575,29 +800,4 @@ func latLngToWebMerc(lat float32, lng float32) (float64, float64) {
 	lng = x
 	lat = float32(3189068.5 * math.Log((1.0+math.Sin(a))/(1.0-math.Sin(a))))
 	return float64(lng), float64(lat)
-}
-
-// Calculate the distance in meter between two lat,lng pairs
-func haversine(latA float64, lonA float64, latB float64, lonB float64) float64 {
-	latA = latA * DEG_TO_RAD
-	lonA = lonA * DEG_TO_RAD
-	latB = latB * DEG_TO_RAD
-	lonB = lonB * DEG_TO_RAD
-
-	dlat := latB - latA
-	dlon := lonB - lonA
-
-	sindlat := math.Sin(dlat / 2)
-	sindlon := math.Sin(dlon / 2)
-
-	a := sindlat*sindlat + math.Cos(latA)*math.Cos(latB)*sindlon*sindlon
-
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
-
-	return c * 6378137.0
-}
-
-// Calculate the distance between two ShapePoints
-func haversineP(a gtfs.ShapePoint, b gtfs.ShapePoint) float64 {
-	return haversine(float64(a.Lat), float64(a.Lon), float64(b.Lat), float64(b.Lon))
 }
