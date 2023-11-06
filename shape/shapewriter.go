@@ -146,7 +146,7 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 }
 
 func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds map[string]bool, outFile string) {
-	csvFile, err := os.Create("out.csv")
+	csvFile, err := os.Create(sw.getCsvFileName(outFile))
 
 	if err != nil {
 		panic(fmt.Sprintf("Could not open CSV file for writing (%s)", err))
@@ -778,6 +778,17 @@ func (sw *ShapeWriter) getShapeFileNameStations(in string) string {
 	name := filepath.Base(in)
 	name = strings.TrimSuffix(name, filepath.Ext(name))
 	name = fmt.Sprint(name, ".stations.shp")
+	name = filepath.Join(filepath.Dir(in), name)
+	return name
+}
+
+/**
+ * Return the sanitized aggregate CSV output file name from the user-provided output file
+ */
+func (sw *ShapeWriter) getCsvFileName(in string) string {
+	name := filepath.Base(in)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	name = fmt.Sprint(name, ".csv")
 	name = filepath.Join(filepath.Dir(in), name)
 	return name
 }
