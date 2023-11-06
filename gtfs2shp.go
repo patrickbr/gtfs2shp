@@ -82,7 +82,7 @@ func main() {
 	sw := shape.NewShapeWriter(*projection, getMotMap(*mots))
 
 	feed := gtfsparser.NewFeed()
-	feed.SetParseOpts(gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), false})
+	feed.SetParseOpts(gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false})
 	e := feed.Parse(*gtfsPath)
 
 	if e != nil {
