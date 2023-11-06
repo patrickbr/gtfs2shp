@@ -31,7 +31,7 @@ func main() {
 	tripsExplicit := flag.Bool("t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
 	perRoute := flag.Bool("r", false, "output shapes per route")
 	projection := flag.String("p", "4326", "output projection, either as SRID or as proj4 projection string")
-	mots := flag.String("m", "0,1,2,3,4,5,6,7", "route types (MOT) to consider, as a comma separated list (see GTFS spec)")
+	mots := flag.String("m", "", "route types (MOT) to consider, as a comma separated list (see GTFS spec). Empty keeps all.")
 	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
 	routeTypeNameMapping := flag.String("route-type-mapping", "", "semicolon-separated list of mapping of {route_type}:{string} to be used on output")
 	writeAddRouteFlds := flag.String("write-add-route-fields", "", "semicolon-separated list of additional route fields to be included in output")
@@ -116,16 +116,7 @@ func main() {
 func getMotMap(motList string) map[int16]bool {
 	arr := strings.Split(motList, ",")
 
-	ret := map[int16]bool{
-		0: false,
-		1: false,
-		2: false,
-		3: false,
-		4: false,
-		5: false,
-		6: false,
-		7: false,
-	}
+	ret := map[int16]bool{}
 
 	for _, a := range arr {
 		i, err := strconv.Atoi(a)
