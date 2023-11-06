@@ -145,7 +145,7 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 	return n
 }
 
-func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds map[string]bool, outFile string) {
+func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds []string, outFile string) {
 	csvFile, err := os.Create(sw.getCsvFileName(outFile))
 
 	if err != nil {
@@ -156,7 +156,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 	headers := []string{"Route_id", "Short_name", "Long_name", "Type", "Frequency", "Meter_len", "Meter_tot", "Agency_name", "Agency_url", "Wchair_tr", "Wchair_st"}
 
-	for field, _ := range routeAddFlds {
+	for _, field := range routeAddFlds {
 		headers = append(headers, field)
 	}
 
@@ -201,6 +201,17 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		vals = append(vals, strconv.FormatFloat(float64(wheelchairTripsTot)/float64(totFreq), 'f', 4, 64))
 		vals = append(vals, strconv.FormatFloat(float64(wheelchairStopsTot)/float64(numStopsTot), 'f', 4, 64))
 
+		for _, field := range routeAddFlds {
+			vald := ""
+			if vals, ok := f.RoutesAddFlds[field]; ok {
+				if val, ok := vals[route.Id]; ok {
+					vald = val
+				}
+			}
+
+			vals = append(vals, vald)
+		}
+
 		csvwriter.Write(vals)
 	}
 
@@ -208,7 +219,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 	csvFile.Close()
 }
 
-func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds map[string]bool, outFile string) int {
+func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]string, routeAddFlds []string, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
 
 	if err != nil {
@@ -262,7 +273,7 @@ func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]st
 
 			i := 11
 
-			for field, _ := range routeAddFlds {
+			for _, field := range routeAddFlds {
 				if flds, ok := f.RoutesAddFlds[field]; ok {
 					if val, ok := flds[r.Id]; ok {
 						shape.WriteAttribute(n, i, val)
@@ -689,7 +700,7 @@ func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []sh
 /**
  * Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
  */
-func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string, routeAddFlds map[string]bool, f *gtfsparser.Feed) []shp.Field {
+func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string, routeAddFlds []string, f *gtfsparser.Feed) []shp.Field {
 	idSize := uint8(0)
 	shortNameSize := uint8(0)
 	LongNameSize := uint8(0)
@@ -727,7 +738,7 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 				AgencyUrlSize = uint8(min(254, len(r.Agency.Url.String())))
 			}
 
-			for field, _ := range routeAddFlds {
+			for _, field := range routeAddFlds {
 				if flds, ok := f.RoutesAddFlds[field]; ok {
 					if val, ok := flds[r.Id]; ok {
 						if uint8(min(254, len(val))) > addFldsSizes[field] {
@@ -753,7 +764,7 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 		shp.FloatField("Wchair_st", 32, 10),
 	}
 
-	for field, _ := range routeAddFlds {
+	for _, field := range routeAddFlds {
 		flds = append(flds, shp.StringField(field, addFldsSizes[field]))
 	}
 

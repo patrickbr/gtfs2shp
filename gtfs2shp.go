@@ -24,7 +24,7 @@ func main() {
 	}
 
 	routeTypeMapping := make(map[int16]string, 0)
-	routeAddFlds := make(map[string]bool, 0)
+	routeAddFlds := make([]string, 0)
 
 	gtfsPath := flag.String("i", "", "gtfs input path, zip or directory")
 	shapeFilePath := flag.String("f", "out.shp", "shapefile output file")
@@ -70,7 +70,7 @@ func main() {
 			continue
 		}
 
-		routeAddFlds[field] = true
+		routeAddFlds = append(routeAddFlds, field)
 	}
 
 	defer func() {
