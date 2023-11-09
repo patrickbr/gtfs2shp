@@ -92,6 +92,7 @@ func (as *AggrShape) CalcMeterLength() {
 
 			if haveFirst && float64(as.Shape.Points[i].Dist_traveled) > as.To {
 				last = i - 1
+				break
 			}
 		}
 	}

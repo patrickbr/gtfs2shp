@@ -465,6 +465,7 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 
 			if haveFirst && float64(gtfsshape[i].Dist_traveled) > to {
 				last = i - 1
+				break
 			}
 		}
 	}
