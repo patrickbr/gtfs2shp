@@ -735,7 +735,7 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 			if uint8(min(254, len(r.Agency.Name))) > AgencyNameSize {
 				AgencyNameSize = uint8(min(254, len(r.Agency.Name)))
 			}
-			if uint8(min(254, len(r.Agency.Url.String()))) > AgencyNameSize {
+			if uint8(min(254, len(r.Agency.Url.String()))) > AgencyUrlSize {
 				AgencyUrlSize = uint8(min(254, len(r.Agency.Url.String())))
 			}
 
