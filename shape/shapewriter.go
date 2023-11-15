@@ -369,7 +369,7 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*A
 
 	// iterate through all trips
 	for _, trip := range trips {
-		if trip.Shape == nil || (len(sw.motMap) > 0 && !sw.motMap[trip.Route.Type]) {
+		if trip.Shape == nil || (len(sw.motMap) > 0 && !sw.motMap[trip.Route.Type]) || len(trip.StopTimes) == 0 {
 			continue
 		}
 
