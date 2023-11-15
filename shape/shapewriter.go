@@ -27,6 +27,7 @@ type ShapeWriter struct {
 	outProj   *proj.Proj
 	wgs84Proj *proj.Proj
 	motMap    map[int16]bool
+	fldMap    map[string]string
 }
 
 type RouteStats struct {
@@ -35,9 +36,10 @@ type RouteStats struct {
 }
 
 // NewShapeWriter creates a new ShapeWriter, writing in the specified projection (as proj4 string)
-func NewShapeWriter(projection string, motMap map[int16]bool) *ShapeWriter {
+func NewShapeWriter(projection string, motMap map[int16]bool, fldMap map[string]string) *ShapeWriter {
 	sw := ShapeWriter{
 		motMap: motMap,
+		fldMap: fldMap,
 	}
 
 	/**
@@ -154,10 +156,10 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 	csvwriter := csv.NewWriter(csvFile)
 
-	headers := []string{"Route_id", "Short_name", "Long_name", "Type", "Frequency", "Meter_len", "Meter_tot", "Agency_name", "Agency_url", "Wchair_tr", "Wchair_st"}
+	headers := []string{sw.fldName("Route_id"), sw.fldName("Short_name"), sw.fldName("Long_name"), sw.fldName("Type"), sw.fldName("Frequency"), sw.fldName("Meter_len"), sw.fldName("Meter_tot"), sw.fldName("Agency_name"), sw.fldName("Agency_url"), sw.fldName("Wchair_tr"), sw.fldName("Wchair_st")}
 
 	for _, field := range routeAddFlds {
-		headers = append(headers, field)
+		headers = append(headers, sw.fldName(field))
 	}
 
 	csvwriter.Write(headers)
@@ -587,16 +589,16 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 	}
 
 	return []shp.Field{
-		shp.StringField("Id", idSize),
-		shp.StringField("Code", codeSize),
-		shp.StringField("Name", nameSize),
-		shp.StringField("Desc", descSize),
-		shp.StringField("Zone_id", zoneIDSize),
-		shp.StringField("Url", urlSize),
-		shp.NumberField("Location_type", 1),
-		shp.StringField("Parent_station", parentStationSize),
-		shp.StringField("Timezone", timezoneSize),
-		shp.StringField("Wheelchair_boarding", 1),
+		shp.StringField(sw.fldName("Id"), idSize),
+		shp.StringField(sw.fldName("Code"), codeSize),
+		shp.StringField(sw.fldName("Name"), nameSize),
+		shp.StringField(sw.fldName("Desc"), descSize),
+		shp.StringField(sw.fldName("Zone_id"), zoneIDSize),
+		shp.StringField(sw.fldName("Url"), urlSize),
+		shp.NumberField(sw.fldName("Location_type"), 1),
+		shp.StringField(sw.fldName("Parent_station"), parentStationSize),
+		shp.StringField(sw.fldName("Timezone"), timezoneSize),
+		shp.StringField(sw.fldName("Wheelchair_boarding"), 1),
 	}
 }
 
@@ -649,20 +651,20 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 	}
 
 	return []shp.Field{
-		shp.StringField("Id", idSize),
-		shp.StringField("Headsign", headsignSize),
-		shp.StringField("ShortName", shortNameSize),
-		shp.NumberField("Dir_id", 1),
-		shp.StringField("BlockId", blockIDSize),
-		shp.NumberField("Wheelchr_a", 1),
-		shp.NumberField("Bikes_alwd", 1),
-		shp.StringField("R_ShrtName", rShortNameSize),
-		shp.StringField("R_LongName", rLongNameSize),
-		shp.StringField("R_Desc", rDescSize),
-		shp.NumberField("R_Type", 16),
-		shp.StringField("R_URL", rURLSize),
-		shp.StringField("R_Color", rColorSize),
-		shp.StringField("R_TextColor", rTextColorSize),
+		shp.StringField(sw.fldName("Id"), idSize),
+		shp.StringField(sw.fldName("Headsign"), headsignSize),
+		shp.StringField(sw.fldName("ShortName"), shortNameSize),
+		shp.NumberField(sw.fldName("Dir_id"), 1),
+		shp.StringField(sw.fldName("BlockId"), blockIDSize),
+		shp.NumberField(sw.fldName("Wheelchr_a"), 1),
+		shp.NumberField(sw.fldName("Bikes_alwd"), 1),
+		shp.StringField(sw.fldName("R_ShrtName"), rShortNameSize),
+		shp.StringField(sw.fldName("R_LongName"), rLongNameSize),
+		shp.StringField(sw.fldName("R_Desc"), rDescSize),
+		shp.NumberField(sw.fldName("R_Type"), 16),
+		shp.StringField(sw.fldName("R_URL"), rURLSize),
+		shp.StringField(sw.fldName("R_Color"), rColorSize),
+		shp.StringField(sw.fldName("R_TextColor"), rTextColorSize),
 	}
 }
 
@@ -691,10 +693,10 @@ func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []sh
 	}
 
 	return []shp.Field{
-		shp.StringField("Id", idSize),
-		shp.StringField("TripIds", tIdsSize),
-		shp.StringField("RouteIds", rIdsSize),
-		shp.StringField("RouteNames", rShortNamesSize),
+		shp.StringField(sw.fldName("Id"), idSize),
+		shp.StringField(sw.fldName("TripIds"), tIdsSize),
+		shp.StringField(sw.fldName("RouteIds"), rIdsSize),
+		shp.StringField(sw.fldName("RouteNames"), rShortNamesSize),
 	}
 }
 
@@ -752,24 +754,31 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 	}
 
 	flds := []shp.Field{
-		shp.StringField("Route_id", idSize),
-		shp.StringField("Short_name", shortNameSize),
-		shp.StringField("Long_name", LongNameSize),
-		shp.StringField("Type", TypeNameSize),
-		shp.NumberField("Frequency", 32),
-		shp.FloatField("Meter_len", 32, 10),
-		shp.FloatField("Meter_tot", 32, 10),
-		shp.StringField("Agency_name", AgencyNameSize),
-		shp.StringField("Agency_url", AgencyUrlSize),
-		shp.FloatField("Wchair_tr", 32, 10),
-		shp.FloatField("Wchair_st", 32, 10),
+		shp.StringField(sw.fldName("Route_id"), idSize),
+		shp.StringField(sw.fldName("Short_name"), shortNameSize),
+		shp.StringField(sw.fldName("Long_name"), LongNameSize),
+		shp.StringField(sw.fldName("Type"), TypeNameSize),
+		shp.NumberField(sw.fldName("Frequency"), 32),
+		shp.FloatField(sw.fldName("Meter_len"), 32, 10),
+		shp.FloatField(sw.fldName("Meter_tot"), 32, 10),
+		shp.StringField(sw.fldName("Agency_name"), AgencyNameSize),
+		shp.StringField(sw.fldName("Agency_url"), AgencyUrlSize),
+		shp.FloatField(sw.fldName("Wchair_tr"), 32, 10),
+		shp.FloatField(sw.fldName("Wchair_st"), 32, 10),
 	}
 
 	for _, field := range routeAddFlds {
-		flds = append(flds, shp.StringField(field, addFldsSizes[field]))
+		flds = append(flds, shp.StringField(sw.fldName(field), addFldsSizes[field]))
 	}
 
 	return flds
+}
+
+func (sw *ShapeWriter) fldName(f string) string {
+	if n, ok := sw.fldMap[f]; ok {
+		return n
+	}
+	return f
 }
 
 /**

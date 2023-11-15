@@ -24,6 +24,7 @@ func main() {
 	}
 
 	routeTypeMapping := make(map[int16]string, 0)
+	outputFldMapping := make(map[string]string, 0)
 	routeAddFlds := make([]string, 0)
 
 	gtfsPath := flag.String("i", "", "gtfs input path, zip or directory")
@@ -34,6 +35,7 @@ func main() {
 	mots := flag.String("m", "", "route types (MOT) to consider, as a comma separated list (see GTFS spec). Empty keeps all.")
 	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
 	routeTypeNameMapping := flag.String("route-type-mapping", "", "semicolon-separated list of mapping of {route_type}:{string} to be used on output")
+	outputFldNameMapping := flag.String("output-field-name-mapping", "", "semicolon-separated list of mapping of {field name}:{new field name} to alter output field names")
 	writeAddRouteFlds := flag.String("write-add-route-fields", "", "semicolon-separated list of additional route fields to be included in output")
 	writeRouteOverviewCsv := flag.Bool("write-route-overview-csv", false, "write a route overview CSV")
 
@@ -64,6 +66,19 @@ func main() {
 
 		routeTypeMapping[int16(mot)] = tupl[1]
 	}
+	for _, pairs := range strings.Split(*outputFldNameMapping, ";") {
+		if len(pairs) == 0 {
+			continue
+		}
+		tupl := strings.SplitN(pairs, ":", 2)
+
+		if len(tupl) != 2 {
+			fmt.Println("Could not read mapping tuple", pairs)
+			os.Exit(1)
+		}
+
+		outputFldMapping[tupl[0]] = tupl[1]
+	}
 
 	for _, field := range strings.Split(*writeAddRouteFlds, ";") {
 		if len(field) == 0 {
@@ -79,7 +94,7 @@ func main() {
 		}
 	}()
 
-	sw := shape.NewShapeWriter(*projection, getMotMap(*mots))
+	sw := shape.NewShapeWriter(*projection, getMotMap(*mots), outputFldMapping)
 
 	feed := gtfsparser.NewFeed()
 	feed.SetParseOpts(gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false})
