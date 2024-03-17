@@ -476,11 +476,10 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 		latdiff := gtfsshape[first].Lat - gtfsshape[first-1].Lat
 		londiff := gtfsshape[first].Lon - gtfsshape[first-1].Lon
 
-		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
 		dMeasure := gtfsshape[first].Dist_traveled - gtfsshape[first-1].Dist_traveled
 
-		lat := gtfsshape[first-1].Lat + latdiff*d/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
-		lon := gtfsshape[first-1].Lon + latdiff*d/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
+		lat := gtfsshape[first-1].Lat + latdiff/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
+		lon := gtfsshape[first-1].Lon + londiff/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
 
 		if sw.outProj != nil {
 			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))
@@ -503,11 +502,10 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 		latdiff := gtfsshape[last+1].Lat - gtfsshape[last].Lat
 		londiff := gtfsshape[last+1].Lon - gtfsshape[last].Lon
 
-		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
 		dMeasure := gtfsshape[last+1].Dist_traveled - gtfsshape[last].Dist_traveled
 
-		lat := gtfsshape[last].Lat + latdiff*d/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
-		lon := gtfsshape[last].Lon + latdiff*d/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
+		lat := gtfsshape[last].Lat + latdiff/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
+		lon := gtfsshape[last].Lon + londiff/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
 
 		if sw.outProj != nil {
 			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))

@@ -103,11 +103,10 @@ func (as *AggrShape) CalcMeterLength() {
 		latdiff := as.Shape.Points[first].Lat - as.Shape.Points[first-1].Lat
 		londiff := as.Shape.Points[first].Lon - as.Shape.Points[first-1].Lon
 
-		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
 		dMeasure := as.Shape.Points[first].Dist_traveled - as.Shape.Points[first-1].Dist_traveled
 
-		lat := as.Shape.Points[first-1].Lat + latdiff*d/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
-		lon := as.Shape.Points[first-1].Lon + latdiff*d/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
+		lat := as.Shape.Points[first-1].Lat + latdiff/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
+		lon := as.Shape.Points[first-1].Lon + londiff/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
 
 		mlen += haversine(float64(lat), float64(lon), float64(as.Shape.Points[first].Lat), float64(as.Shape.Points[first].Lon))
 	}
@@ -116,11 +115,10 @@ func (as *AggrShape) CalcMeterLength() {
 		latdiff := as.Shape.Points[last+1].Lat - as.Shape.Points[last].Lat
 		londiff := as.Shape.Points[last+1].Lon - as.Shape.Points[last].Lon
 
-		d := float32(math.Sqrt(float64(latdiff*latdiff + londiff*londiff)))
 		dMeasure := as.Shape.Points[last+1].Dist_traveled - as.Shape.Points[last].Dist_traveled
 
-		lat := as.Shape.Points[last].Lat + latdiff*d/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
-		lon := as.Shape.Points[last].Lon + latdiff*d/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
+		lat := as.Shape.Points[last].Lat + latdiff/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
+		lon := as.Shape.Points[last].Lon + londiff/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
 
 		mlen += haversine(float64(lat), float64(lon), float64(as.Shape.Points[last].Lat), float64(as.Shape.Points[last].Lon))
 	}
