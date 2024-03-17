@@ -375,6 +375,14 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*A
 			continue
 		}
 
+		numOnOffStops := 0
+
+		for _, st := trip.StopTimes {
+			if st.Drop_off_type() != 1 || st.Pickup_type() != 1 {
+				numOnOffStops += 1
+			}
+		}
+
 		aggrShapeId := trip.Shape.Id
 
 		if trip.StopTimes[0].HasDistanceTraveled() && trip.StopTimes[len(trip.StopTimes)-1].HasDistanceTraveled() {
@@ -425,7 +433,7 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*A
 		for d := start; !d.GetTime().After(endT); d = d.GetOffsettedDate(1) {
 			if trip.Service.IsActiveOn(d) {
 				ret[aggrShapeId].RouteTripCount[trip.Route] += 1
-				ret[aggrShapeId].NumStops[trip.Route] += len(trip.StopTimes)
+				ret[aggrShapeId].NumStops[trip.Route] += numOnOffStops
 
 				if trip.Wheelchair_accessible == 1 {
 					ret[aggrShapeId].WheelchairAccessibleTrips[trip.Route] += 1
