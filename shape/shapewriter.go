@@ -377,7 +377,7 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*A
 
 		numOnOffStops := 0
 
-		for _, st := trip.StopTimes {
+		for _, st := range trip.StopTimes {
 			if st.Drop_off_type() != 1 || st.Pickup_type() != 1 {
 				numOnOffStops += 1
 			}
