@@ -156,7 +156,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 	csvwriter := csv.NewWriter(csvFile)
 
-	headers := []string{sw.fldName("Route_id"), sw.fldName("Short_name"), sw.fldName("Long_name"), sw.fldName("Type"), sw.fldName("Frequency"), sw.fldName("Meter_len"), sw.fldName("Meter_tot"), sw.fldName("Agency_name"), sw.fldName("Agency_url"), sw.fldName("Wchair_tr"), sw.fldName("Wchair_st")}
+	headers := []string{sw.fldName("Route_id"), sw.fldName("Short_name"), sw.fldName("Long_name"), sw.fldName("Type"), sw.fldName("Frequency"), sw.fldName("Meter_len"), sw.fldName("Meter_tot"), sw.fldName("Meter_max"), sw.fldName("Agency_name"), sw.fldName("Agency_url"), sw.fldName("Wchair_tr"), sw.fldName("Wchair_st")}
 
 	for _, field := range routeAddFlds {
 		headers = append(headers, sw.fldName(field))
@@ -177,6 +177,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 		totFreq := 0
 		totMeterLength := 0.0
+		maxMeterLength := 0.0
 		wheelchairTripsTot := 0
 		wheelchairStopsTot := 0
 		numStopsTot := 0
@@ -185,6 +186,9 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 			aggrShp := aggrShapes[s]
 			totFreq += aggrShp.RouteTripCount[route]
 			totMeterLength += aggrShp.MeterLength * float64(aggrShp.RouteTripCount[route])
+			if aggrShp.MeterLength > maxMeterLength {
+				maxMeterLength = aggrShp.MeterLength
+			}
 			wheelchairTripsTot += aggrShp.WheelchairAccessibleTrips[route]
 			wheelchairStopsTot += aggrShp.WheelchairAccessibleStops[route]
 			numStopsTot += aggrShp.NumStops[route]
@@ -193,6 +197,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		vals = append(vals, strconv.FormatInt(int64(totFreq), 10))
 		vals = append(vals, strconv.FormatFloat(float64(totMeterLength)/float64(totFreq), 'f', 4, 64))
 		vals = append(vals, strconv.FormatFloat(totMeterLength, 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(maxMeterLength, 'f', 4, 64))
 		vals = append(vals, route.Agency.Name)
 		if route.Agency.Url != nil {
 			vals = append(vals, route.Agency.Url.String())
