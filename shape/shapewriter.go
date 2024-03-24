@@ -156,7 +156,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 	csvwriter := csv.NewWriter(csvFile)
 
-	headers := []string{sw.fldName("Route_id"), sw.fldName("Short_name"), sw.fldName("Long_name"), sw.fldName("Type"), sw.fldName("Frequency"), sw.fldName("Meter_len"), sw.fldName("Meter_tot"), sw.fldName("Meter_max"), sw.fldName("Agency_name"), sw.fldName("Agency_url"), sw.fldName("Wchair_tr"), sw.fldName("Wchair_st")}
+	headers := []string{sw.fldName("Route_id"), sw.fldName("Short_name"), sw.fldName("Long_name"), sw.fldName("Type"), sw.fldName("Frequency"), sw.fldName("Km_len"), sw.fldName("Km_tot"), sw.fldName("Km_max"), sw.fldName("Agency_name"), sw.fldName("Agency_url"), sw.fldName("Wchair_tr"), sw.fldName("Wchair_st")}
 
 	for _, field := range routeAddFlds {
 		headers = append(headers, sw.fldName(field))
@@ -195,9 +195,9 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		}
 
 		vals = append(vals, strconv.FormatInt(int64(totFreq), 10))
-		vals = append(vals, strconv.FormatFloat(float64(totMeterLength)/float64(totFreq), 'f', 4, 64))
-		vals = append(vals, strconv.FormatFloat(totMeterLength, 'f', 4, 64))
-		vals = append(vals, strconv.FormatFloat(maxMeterLength, 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat((float64(totMeterLength)/float64(totFreq)) / float64(1000), 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(totMeterLength / 1000.0, 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(maxMeterLength / 1000.0, 'f', 4, 64))
 		vals = append(vals, route.Agency.Name)
 		if route.Agency.Url != nil {
 			vals = append(vals, route.Agency.Url.String())
@@ -260,11 +260,11 @@ func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]st
 			// number of trips
 			shape.WriteAttribute(n, 4, aggrShape.RouteTripCount[r])
 
-			// length in m
-			shape.WriteAttribute(n, 5, aggrShape.MeterLength)
+			// length in km
+			shape.WriteAttribute(n, 5, aggrShape.MeterLength / 1000.0)
 
-			// route tot travelled
-			shape.WriteAttribute(n, 6, float64(aggrShape.RouteTripCount[r])*aggrShape.MeterLength)
+			// route tot travelled in km
+			shape.WriteAttribute(n, 6, (float64(aggrShape.RouteTripCount[r])*aggrShape.MeterLength) / 1000.0)
 
 			// agency name
 			shape.WriteAttribute(n, 7, r.Agency.Name)
@@ -770,8 +770,8 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 		shp.StringField(sw.fldName("Long_name"), LongNameSize),
 		shp.StringField(sw.fldName("Type"), TypeNameSize),
 		shp.NumberField(sw.fldName("Frequency"), 32),
-		shp.FloatField(sw.fldName("Meter_len"), 32, 10),
-		shp.FloatField(sw.fldName("Meter_tot"), 32, 10),
+		shp.FloatField(sw.fldName("Km_len"), 32, 10),
+		shp.FloatField(sw.fldName("Km_tot"), 32, 10),
 		shp.StringField(sw.fldName("Agency_name"), AgencyNameSize),
 		shp.StringField(sw.fldName("Agency_url"), AgencyUrlSize),
 		shp.FloatField(sw.fldName("Wchair_tr"), 32, 10),
