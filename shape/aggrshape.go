@@ -22,6 +22,7 @@ type AggrShape struct {
 	Trips                     map[string]*gtfs.Trip
 	Routes                    map[string]*gtfs.Route
 	RouteTripCount            map[*gtfs.Route]int
+	RouteUniqueTripCount            map[*gtfs.Route]int
 	MeterLength               float64
 	NumStops                  map[*gtfs.Route]int
 	WheelchairAccessibleTrips map[*gtfs.Route]int
@@ -36,6 +37,7 @@ func NewAggrShape() *AggrShape {
 		Trips:                     make(map[string]*gtfs.Trip),
 		Routes:                    make(map[string]*gtfs.Route),
 		RouteTripCount:            make(map[*gtfs.Route]int),
+		RouteUniqueTripCount:      make(map[*gtfs.Route]int),
 		MeterLength:               0,
 		NumStops:                  make(map[*gtfs.Route]int),
 		WheelchairAccessibleTrips: make(map[*gtfs.Route]int),

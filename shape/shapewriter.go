@@ -164,7 +164,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 
 	csvwriter.Write(headers)
 
-	aggrShapes, routeShapes := sw.getAggrShapes(f.Trips)
+	aggrShapes, routeShapes := sw.getAggrShapes(f.Trips, f)
 
 	for route, shapes := range routeShapes {
 		vals := []string{route.Id, route.Short_name, route.Long_name}
@@ -176,7 +176,9 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		}
 
 		totFreq := 0
+		uniqueAggregatedFreq := 0
 		totMeterLength := 0.0
+		totMeterLengthSingular := 0.0
 		maxMeterLength := 0.0
 		wheelchairTripsTot := 0
 		wheelchairStopsTot := 0
@@ -185,7 +187,11 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		for s, _ := range shapes {
 			aggrShp := aggrShapes[s]
 			totFreq += aggrShp.RouteTripCount[route]
+
+			uniqueAggregatedFreq += aggrShp.RouteUniqueTripCount[route]
+
 			totMeterLength += aggrShp.MeterLength * float64(aggrShp.RouteTripCount[route])
+			totMeterLengthSingular += aggrShp.MeterLength
 			if aggrShp.MeterLength > maxMeterLength {
 				maxMeterLength = aggrShp.MeterLength
 			}
@@ -194,7 +200,7 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 			numStopsTot += aggrShp.NumStops[route]
 		}
 
-		vals = append(vals, strconv.FormatInt(int64(totFreq), 10))
+		vals = append(vals, strconv.FormatInt(int64(uniqueAggregatedFreq), 10))
 		vals = append(vals, strconv.FormatFloat((float64(totMeterLength)/float64(totFreq)) / float64(1000), 'f', 4, 64))
 		vals = append(vals, strconv.FormatFloat(totMeterLength / 1000.0, 'f', 4, 64))
 		vals = append(vals, strconv.FormatFloat(maxMeterLength / 1000.0, 'f', 4, 64))
@@ -238,7 +244,7 @@ func (sw *ShapeWriter) WriteRouteShapes(f *gtfsparser.Feed, typeMap map[int16]st
 
 	// get aggreshape map
 	// aggrShapes, routeStats := sw.getAggrShapes(f.Trips)
-	aggrShapes, _ := sw.getAggrShapes(f.Trips)
+	aggrShapes, _ := sw.getAggrShapes(f.Trips, f)
 	shape.SetFields(sw.getFieldSizesForRouteShapes(aggrShapes, typeMap, routeAddFlds, f))
 
 	for _, aggrShape := range aggrShapes {
@@ -313,7 +319,7 @@ func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
 	n := 0
 
 	// get aggreshape map
-	aggrShapes, _ := sw.getAggrShapes(f.Trips)
+	aggrShapes, _ := sw.getAggrShapes(f.Trips, f)
 	shape.SetFields(sw.getFieldSizesForShapes(aggrShapes))
 
 	for _, aggrShape := range aggrShapes {
@@ -370,7 +376,7 @@ func (sw *ShapeWriter) WriteStops(f *gtfsparser.Feed, outFile string) int {
 }
 
 // return aggregrated shapes from GTFS trips
-func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*AggrShape, map[*gtfs.Route]map[string]bool) {
+func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip, feed *gtfsparser.Feed) (map[string]*AggrShape, map[*gtfs.Route]map[string]bool) {
 	ret := make(map[string]*AggrShape)
 	routeShapes := make(map[*gtfs.Route]map[string]bool)
 
@@ -438,6 +444,17 @@ func (sw *ShapeWriter) getAggrShapes(trips map[string]*gtfs.Trip) (map[string]*A
 		for d := start; !d.GetTime().After(endT); d = d.GetOffsettedDate(1) {
 			if trip.Service.IsActiveOn(d) {
 				ret[aggrShapeId].RouteTripCount[trip.Route] += 1
+
+				vals, ok := feed.TripsAddFlds["__trip_count_no_count"]
+				if ok {
+					val, ok := vals[trip.Id]
+					if !ok || val != "1" {
+						ret[aggrShapeId].RouteUniqueTripCount[trip.Route] += 1
+					}
+				} else {
+					ret[aggrShapeId].RouteUniqueTripCount[trip.Route] += 1
+				}
+
 				ret[aggrShapeId].NumStops[trip.Route] += numOnOffStops
 
 				if trip.Wheelchair_accessible == 1 {
