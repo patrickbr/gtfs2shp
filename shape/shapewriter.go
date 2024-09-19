@@ -201,9 +201,9 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 		}
 
 		vals = append(vals, strconv.FormatInt(int64(uniqueAggregatedFreq), 10))
-		vals = append(vals, strconv.FormatFloat((float64(totMeterLength)/float64(totFreq)) / float64(1000), 'f', 4, 64))
-		vals = append(vals, strconv.FormatFloat(totMeterLength / 1000.0, 'f', 4, 64))
-		vals = append(vals, strconv.FormatFloat(maxMeterLength / 1000.0, 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(((totMeterLength)/float64(totFreq)) / float64(1000), 'f', 10, 64))
+		vals = append(vals, strconv.FormatFloat(totMeterLength / 1000.0, 'f', 10, 64))
+		vals = append(vals, strconv.FormatFloat(maxMeterLength / 1000.0, 'f', 10, 64))
 		vals = append(vals, route.Agency.Name)
 		if route.Agency.Url != nil {
 			vals = append(vals, route.Agency.Url.String())
@@ -211,8 +211,8 @@ func (sw *ShapeWriter) WriteRouteOverviewCsv(f *gtfsparser.Feed, typeMap map[int
 			vals = append(vals, "")
 		}
 
-		vals = append(vals, strconv.FormatFloat(float64(wheelchairTripsTot)/float64(totFreq), 'f', 4, 64))
-		vals = append(vals, strconv.FormatFloat(float64(wheelchairStopsTot)/float64(numStopsTot), 'f', 4, 64))
+		vals = append(vals, strconv.FormatFloat(float64(wheelchairTripsTot)/float64(totFreq), 'f', 10, 64))
+		vals = append(vals, strconv.FormatFloat(float64(wheelchairStopsTot)/float64(numStopsTot), 'f', 10, 64))
 
 		for _, field := range routeAddFlds {
 			vald := ""
@@ -503,13 +503,13 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 	}
 
 	if first > 0 {
-		latdiff := gtfsshape[first].Lat - gtfsshape[first-1].Lat
-		londiff := gtfsshape[first].Lon - gtfsshape[first-1].Lon
+		latdiff := float64(gtfsshape[first].Lat) - float64(gtfsshape[first-1].Lat)
+		londiff := float64(gtfsshape[first].Lon) - float64(gtfsshape[first-1].Lon)
 
-		dMeasure := gtfsshape[first].Dist_traveled - gtfsshape[first-1].Dist_traveled
+		dMeasure := float64(gtfsshape[first].Dist_traveled) - float64(gtfsshape[first-1].Dist_traveled)
 
-		lat := gtfsshape[first-1].Lat + latdiff/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
-		lon := gtfsshape[first-1].Lon + londiff/dMeasure*(float32(from)-gtfsshape[first-1].Dist_traveled)
+		lat := float64(gtfsshape[first-1].Lat) + latdiff/dMeasure*((from)-float64(gtfsshape[first-1].Dist_traveled))
+		lon := float64(gtfsshape[first-1].Lon) + londiff/dMeasure*((from)-float64(gtfsshape[first-1].Dist_traveled))
 
 		if sw.outProj != nil {
 			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))
@@ -529,13 +529,13 @@ func (sw *ShapeWriter) gtfsShapePointsToShpLinePoints(gtfsshape gtfs.ShapePoints
 	}
 
 	if last < len(gtfsshape)-1 {
-		latdiff := gtfsshape[last+1].Lat - gtfsshape[last].Lat
-		londiff := gtfsshape[last+1].Lon - gtfsshape[last].Lon
+		latdiff := float64(gtfsshape[last+1].Lat) - float64(gtfsshape[last].Lat)
+		londiff := float64(gtfsshape[last+1].Lon) - float64(gtfsshape[last].Lon)
 
-		dMeasure := gtfsshape[last+1].Dist_traveled - gtfsshape[last].Dist_traveled
+		dMeasure := float64(gtfsshape[last+1].Dist_traveled) - float64(gtfsshape[last].Dist_traveled)
 
-		lat := gtfsshape[last].Lat + latdiff/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
-		lon := gtfsshape[last].Lon + londiff/dMeasure*(float32(to)-gtfsshape[last].Dist_traveled)
+		lat := float64(gtfsshape[last].Lat) + latdiff/dMeasure*((to)-float64(gtfsshape[last].Dist_traveled))
+		lon := float64(gtfsshape[last].Lon) + londiff/dMeasure*((to)-float64(gtfsshape[last].Dist_traveled))
 
 		if sw.outProj != nil {
 			x, y, _ := proj.Transform2(sw.wgs84Proj, sw.outProj, proj.DegToRad(float64(lon)), proj.DegToRad(float64(lat)))
@@ -787,8 +787,8 @@ func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape,
 		shp.StringField(sw.fldName("Long_name"), LongNameSize),
 		shp.StringField(sw.fldName("Type"), TypeNameSize),
 		shp.NumberField(sw.fldName("Frequency"), 32),
-		shp.FloatField(sw.fldName("Km_len"), 32, 10),
-		shp.FloatField(sw.fldName("Km_tot"), 32, 10),
+		shp.FloatField(sw.fldName("Km_len"), 64, 10),
+		shp.FloatField(sw.fldName("Km_tot"), 64, 10),
 		shp.StringField(sw.fldName("Agency_name"), AgencyNameSize),
 		shp.StringField(sw.fldName("Agency_url"), AgencyUrlSize),
 		shp.FloatField(sw.fldName("Wchair_tr"), 32, 10),

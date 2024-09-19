@@ -22,7 +22,7 @@ type AggrShape struct {
 	Trips                     map[string]*gtfs.Trip
 	Routes                    map[string]*gtfs.Route
 	RouteTripCount            map[*gtfs.Route]int
-	RouteUniqueTripCount            map[*gtfs.Route]int
+	RouteUniqueTripCount      map[*gtfs.Route]int
 	MeterLength               float64
 	NumStops                  map[*gtfs.Route]int
 	WheelchairAccessibleTrips map[*gtfs.Route]int
@@ -84,8 +84,7 @@ func (as *AggrShape) CalcMeterLength() {
 			if math.IsNaN(float64(as.Shape.Points[i].Dist_traveled)) {
 				first = 0
 				last = len(as.Shape.Points) - 1
-				break
-			}
+				break }
 
 			if !haveFirst && float64(as.Shape.Points[i].Dist_traveled) >= as.From {
 				first = i
@@ -102,25 +101,25 @@ func (as *AggrShape) CalcMeterLength() {
 	mlen := 0.0
 
 	if first > 0 {
-		latdiff := as.Shape.Points[first].Lat - as.Shape.Points[first-1].Lat
-		londiff := as.Shape.Points[first].Lon - as.Shape.Points[first-1].Lon
+		latdiff := float64(as.Shape.Points[first].Lat) - float64(as.Shape.Points[first-1].Lat)
+		londiff := float64(as.Shape.Points[first].Lon) - float64(as.Shape.Points[first-1].Lon)
 
-		dMeasure := as.Shape.Points[first].Dist_traveled - as.Shape.Points[first-1].Dist_traveled
+		dMeasure := float64(as.Shape.Points[first].Dist_traveled) - float64(as.Shape.Points[first-1].Dist_traveled)
 
-		lat := as.Shape.Points[first-1].Lat + latdiff/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
-		lon := as.Shape.Points[first-1].Lon + londiff/dMeasure*(float32(as.From)-as.Shape.Points[first-1].Dist_traveled)
+		lat := float64(as.Shape.Points[first-1].Lat) + latdiff/dMeasure*((as.From)-float64(as.Shape.Points[first-1].Dist_traveled))
+		lon := float64(as.Shape.Points[first-1].Lon) + londiff/dMeasure*((as.From)-float64(as.Shape.Points[first-1].Dist_traveled))
 
 		mlen += haversine(float64(lat), float64(lon), float64(as.Shape.Points[first].Lat), float64(as.Shape.Points[first].Lon))
 	}
 
 	if last < len(as.Shape.Points)-1 {
-		latdiff := as.Shape.Points[last+1].Lat - as.Shape.Points[last].Lat
-		londiff := as.Shape.Points[last+1].Lon - as.Shape.Points[last].Lon
+		latdiff := float64(as.Shape.Points[last+1].Lat) - float64(as.Shape.Points[last].Lat)
+		londiff := float64(as.Shape.Points[last+1].Lon) - float64(as.Shape.Points[last].Lon)
 
-		dMeasure := as.Shape.Points[last+1].Dist_traveled - as.Shape.Points[last].Dist_traveled
+		dMeasure := float64(as.Shape.Points[last+1].Dist_traveled) - float64(as.Shape.Points[last].Dist_traveled)
 
-		lat := as.Shape.Points[last].Lat + latdiff/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
-		lon := as.Shape.Points[last].Lon + londiff/dMeasure*(float32(as.To)-as.Shape.Points[last].Dist_traveled)
+		lat := float64(as.Shape.Points[last].Lat) + latdiff/dMeasure*((as.To)-float64(as.Shape.Points[last].Dist_traveled))
+		lon := float64(as.Shape.Points[last].Lon) + londiff/dMeasure*((as.To)-float64(as.Shape.Points[last].Dist_traveled))
 
 		mlen += haversine(float64(lat), float64(lon), float64(as.Shape.Points[last].Lat), float64(as.Shape.Points[last].Lon))
 	}
@@ -158,12 +157,12 @@ func haversine(latA float64, lonA float64, latB float64, lonB float64) float64 {
 	dlat := latB - latA
 	dlon := lonB - lonA
 
-	sindlat := math.Sin(dlat / 2)
-	sindlon := math.Sin(dlon / 2)
+	sindlat := math.Sin(dlat / 2.0)
+	sindlon := math.Sin(dlon / 2.0)
 
 	a := sindlat*sindlat + math.Cos(latA)*math.Cos(latB)*sindlon*sindlon
 
-	c := 2 * math.Atan2(math.Sqrt(a), math.Sqrt(1-a))
+	c := 2.0 * math.Atan2(math.Sqrt(a), math.Sqrt(1.0-a))
 
 	return c * 6378137.0
 }
