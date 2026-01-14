@@ -7,10 +7,10 @@
 package main
 
 import (
-	"flag"
+	flag "github.com/spf13/pflag"
 	"fmt"
-	"github.com/patrickbr/gtfs2shp/shape"
 	"github.com/patrickbr/gtfsparser"
+	"github.com/patrickbr/gtfs2shp/shape"
 	gtfs "github.com/patrickbr/gtfsparser/gtfs"
 	"os"
 	"strconv"
@@ -19,7 +19,7 @@ import (
 
 func main() {
 	flag.Usage = func() {
-		fmt.Fprintf(os.Stderr, "gtfs2shp - 2016 by P. Brosi\n\nUsage:\n\n  %s -f <outputfile> -i <input GTFS>\n\nAllowed options:\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "gtfs2shp - 2016 by P. Brosi\n\nUsage:\n\n  %s -f <outputfile> <input GTFS>\n\nAllowed options:\n\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 
@@ -27,13 +27,17 @@ func main() {
 	outputFldMapping := make(map[string]string, 0)
 	routeAddFlds := make([]string, 0)
 
-	gtfsPath := flag.String("i", "", "gtfs input path, zip or directory")
-	shapeFilePath := flag.String("f", "out.shp", "shapefile output file")
-	tripsExplicit := flag.Bool("t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
-	perRoute := flag.Bool("r", false, "output shapes per route")
-	projection := flag.String("p", "4326", "output projection, either as SRID or as proj4 projection string")
-	mots := flag.String("m", "", "route types (MOT) to consider, as a comma separated list (see GTFS spec). Empty keeps all.")
-	stations := flag.Bool("s", false, "output station point geometries as well (will be written into <outputfilename>-stations.shp)")
+	gtfsPath := flag.StringP("input", "i", "", "gtfs input path, zip or directory")
+	shapeFilePath := flag.StringP("shapefile", "f", "out.shp", "shapefile output file")
+	tripsExplicit := flag.BoolP("trips-explicit", "t", false, "output each trip explicitly (creating a distinct geometry for every trip)")
+	trip := flag.StringP("trip", "T", "", "output single trip with this ID")
+	exShape := flag.StringP("shape", "S", "", "output single shape with this ID")
+	perRoute := flag.BoolP("per-route", "r", false, "output shapes per route")
+	projection := flag.StringP("projection", "p", "4326", "output projection, either as SRID or as proj4 projection string")
+	mots := flag.StringP("mot-keep", "m", "", "route types (MOT) to consider, as a comma separated list (see GTFS spec). Empty keeps all.")
+	stations := flag.BoolP("stations", "s", false, "output station point geometries as well (will be written into <outputfilename>.stations.shp)")
+	tripStops := flag.BoolP("trip-stops", "", false, "output trip stop point geometries as well (will be written into <outputfilename>.stops.shp)")
+	tripShape := flag.BoolP("trip-shape", "", false, "output full trip shape as well (will be written into <outputfilename>.shape.shp)")
 	routeTypeNameMapping := flag.String("route-type-mapping", "", "semicolon-separated list of mapping of {route_type}:{string} to be used on output")
 	outputFldNameMapping := flag.String("output-field-name-mapping", "", "semicolon-separated list of mapping of {field name}:{new field name} to alter output field names")
 	writeAddRouteFlds := flag.String("write-add-route-fields", "", "semicolon-separated list of additional route fields to be included in output")
@@ -41,8 +45,19 @@ func main() {
 
 	flag.Parse()
 
-	if len(*gtfsPath) == 0 {
+	gtfsPaths := flag.Args()
+
+	if len(*gtfsPath) != 0 {
+		gtfsPaths = append(gtfsPaths, *gtfsPath)
+	}
+
+	if len(gtfsPaths) == 0 {
 		fmt.Fprintln(os.Stderr, "No GTFS location specified, see --help")
+		os.Exit(1)
+	}
+
+	if len(gtfsPaths) > 1 {
+		fmt.Fprintln(os.Stderr, "Multiple input GTFS feeds not supported")
 		os.Exit(1)
 	}
 
@@ -97,18 +112,38 @@ func main() {
 	sw := shape.NewShapeWriter(*projection, getMotMap(*mots), outputFldMapping)
 
 	feed := gtfsparser.NewFeed()
-	feed.SetParseOpts(gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false})
-	e := feed.Parse(*gtfsPath)
+	opts := gtfsparser.ParseOptions{false, false, false, false, "", false, false, false, len(routeAddFlds) > 0, gtfs.Date{}, gtfs.Date{}, make([]gtfsparser.Polygon, 0), false, make(map[int16]bool, 0), make(map[int16]bool, 0), false, false, false, false}
+	opts.UseDefValueOnError = true
+	opts.ShowWarnings = true
+	feed.SetParseOpts(opts)
+	e := feed.Parse(gtfsPaths[0])
 
 	if e != nil {
-		fmt.Fprintf(os.Stderr, "Error while parsing GTFS feed in '%s':\n ", *gtfsPath)
+		fmt.Fprintf(os.Stderr, "Error while parsing GTFS feed in '%s':\n ", gtfsPaths[0])
 		fmt.Fprintf(os.Stderr, e.Error())
 		os.Exit(1)
 	} else {
 		n := 0
 
-		if *tripsExplicit {
-			n += sw.WriteTripsExplicit(feed, *shapeFilePath)
+		if exShape != nil && len(*exShape) > 0 {
+			s, ok := feed.Shapes[*exShape]
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Could not find shape %s\n", *exShape)
+				os.Exit(1)
+			}
+			n += sw.WriteShapeExplicit(s, *shapeFilePath)
+		} else if trip != nil && len(*trip) > 0 {
+			t, ok := feed.Trips[*trip]
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Could not find trip %s\n", *trip)
+				os.Exit(1)
+			}
+			n += sw.WriteTripsExplicit(feed, *trip, *shapeFilePath)
+			if t.Shape != nil && *tripShape {
+				n += sw.WriteShapeExplicit(t.Shape, *shapeFilePath)
+			}
+		} else if *tripsExplicit {
+			n += sw.WriteTripsExplicit(feed, "", *shapeFilePath)
 		} else if *perRoute {
 			n += sw.WriteRouteShapes(feed, routeTypeMapping, routeAddFlds, *shapeFilePath)
 		} else {
@@ -122,6 +157,11 @@ func main() {
 		// write stations if requested
 		if *stations {
 			n += sw.WriteStops(feed, *shapeFilePath)
+		}
+
+		// write stations if requested
+		if *tripStops && len(*trip) > 0 {
+			n += sw.WriteTripStops(feed, *trip, *shapeFilePath)
 		}
 
 		fmt.Printf("Written %d geometries.\n", n)

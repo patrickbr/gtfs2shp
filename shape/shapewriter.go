@@ -9,7 +9,7 @@ package shape
 import (
 	"encoding/csv"
 	"fmt"
-	"github.com/jonas-p/go-shp"
+	"github.com/patrickbr/go-shp"
 	"github.com/patrickbr/gtfsparser"
 	"github.com/patrickbr/gtfsparser/gtfs"
 	"github.com/pebbe/go-proj-4/proj/v5"
@@ -43,11 +43,11 @@ func NewShapeWriter(projection string, motMap map[int16]bool, fldMap map[string]
 	}
 
 	/**
-	 * NOTE: go-proj-4 does not yet support pj_is_latlong(), which
-	 * means we have no secure way the test whether the user requested
-	 * latlng output. If EPSG:4326 is defined in another way than tested
-	 * here, it will reproject the coordinates to latlng in radians!
-	 */
+	* NOTE: go-proj-4 does not yet support pj_is_latlong(), which
+	* means we have no secure way the test whether the user requested
+	* latlng output. If EPSG:4326 is defined in another way than tested
+	* here, it will reproject the coordinates to latlng in radians!
+	*/
 	if projection != "4326" && projection != wgs84 {
 		// we need reprojection of coordinates
 
@@ -80,9 +80,39 @@ func NewShapeWriter(projection string, motMap map[int16]bool, fldMap map[string]
 	return &sw
 }
 
+// WriteShapeExplicit
+func (sw *ShapeWriter) WriteShapeExplicit(s *gtfs.Shape, outFile string) int {
+	shape, err := shp.Create(sw.getTripShapeFileName(outFile), shp.POLYLINE)
+
+	if err != nil {
+		panic(fmt.Sprintf("Could not open shapefile for writing (%s)", err))
+	}
+	defer shape.Close()
+
+	n := 0
+
+	shape.SetFields(sw.getFieldSizesForShape(s))
+
+	for i := 1; i < len(s.Points); i++ {
+		from := math.NaN()
+		to := math.NaN()
+
+		points := sw.gtfsShapePointsToShpLinePoints(gtfs.ShapePoints{s.Points[i-1], s.Points[i]}, from, to)
+		parts := [][]shp.Point{points}
+
+		shape.Write(shp.NewPolyLine(parts))
+
+		shape.WriteAttribute(n, 0, s.Id)
+		shape.WriteAttribute(n, 1, float64(s.Points[i-1].Dist_traveled))
+		shape.WriteAttribute(n, 2, float64(s.Points[i].Dist_traveled))
+		n = n + 1
+	}
+	return n
+}
+
 // WriteTripsExplicit writes the shapes contained in Feed f to outFile, with each trip as an
 // explicit geometry with all trip attributes
-func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) int {
+func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, tid string, outFile string) int {
 	shape, err := shp.Create(sw.getShapeFileName(outFile), shp.POLYLINE)
 
 	if err != nil {
@@ -95,53 +125,126 @@ func (sw *ShapeWriter) WriteTripsExplicit(f *gtfsparser.Feed, outFile string) in
 	n := 0
 	calcedShapes := make(map[string]*shp.PolyLine)
 
+	trips := f.Trips
+
+	if len(tid) > 0 {
+		trip, ok := f.Trips[tid]
+		if ok {
+			trips = make(map[string]*gtfs.Trip)
+			trips[tid] = trip
+		} else {
+			panic(fmt.Sprintf("Trip not found: %s", tid))
+		}
+	}
+
 	// iterate through trips
-	for _, trip := range f.Trips {
+	for _, trip := range trips {
 		if len(sw.motMap) > 0 && !sw.motMap[trip.Route.Type] {
 			continue
 		}
 
-		if trip.Shape != nil {
-			from := math.NaN()
-			to := math.NaN()
-			if len(trip.StopTimes) > 0 {
-				from = float64(trip.StopTimes[0].Shape_dist_traveled())
-				to = float64(trip.StopTimes[len(trip.StopTimes)-1].Shape_dist_traveled())
-			}
-			points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points, from, to)
-			parts := [][]shp.Point{points}
+		if len(tid) > 0 {
+			if trip.Shape != nil {
+				for i := 1; i < len(trip.StopTimes); i++ {
+					from := float64(trip.StopTimes[i-1].Shape_dist_traveled())
+					to := float64(trip.StopTimes[i].Shape_dist_traveled())
 
-			// prevent re-calcing of polylines for each trips
-			if val, ok := calcedShapes[trip.Shape.Id]; ok {
-				shape.Write(val)
+					points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points, from, to)
+					parts := [][]shp.Point{points}
+
+					shape.Write(shp.NewPolyLine(parts))
+				}
 			} else {
-				calcedShapes[trip.Shape.Id] = shp.NewPolyLine(parts)
-				shape.Write(calcedShapes[trip.Shape.Id])
+				for i := 1; i < len(trip.StopTimes); i++ {
+					parts := [][]shp.Point{}
+					parts[0] = append(parts[0], *sw.gtfsStopToShpPoint(trip.StopTimes[i-1].Stop()))
+					parts[0] = append(parts[0], *sw.gtfsStopToShpPoint(trip.StopTimes[i].Stop()))
+
+					shape.Write(shp.NewPolyLine(parts))
+				}
+			}
+
+			for i := 1; i < len(trip.StopTimes); i++ {
+				stCur := trip.StopTimes[i]
+				shape.WriteAttribute(n, 0, trip.Id)
+
+				if stCur.Headsign() != nil {
+					shape.WriteAttribute(n, 1, *stCur.Headsign())
+				} else if trip.Headsign != nil {
+					shape.WriteAttribute(n, 1, *trip.Headsign)
+				}
+
+				if trip.Short_name != nil {
+					shape.WriteAttribute(n, 2, *trip.Short_name)
+				} else {
+					shape.WriteAttribute(n, 2, "")
+				}
+
+				shape.WriteAttribute(n, 3, trip.Direction_id)
+				if trip.Block_id != nil {
+					shape.WriteAttribute(n, 4, *trip.Block_id)
+				}
+				shape.WriteAttribute(n, 5, trip.Wheelchair_accessible)
+				shape.WriteAttribute(n, 6, trip.Bikes_allowed)
+				shape.WriteAttribute(n, 7, trip.Route.Short_name)
+				shape.WriteAttribute(n, 8, trip.Route.Long_name)
+				shape.WriteAttribute(n, 9, trip.Route.Desc)
+				shape.WriteAttribute(n, 10, trip.Route.Type)
+				shape.WriteAttribute(n, 11, trip.Route.Url)
+				shape.WriteAttribute(n, 12, trip.Route.Color)
+				shape.WriteAttribute(n, 13, trip.Route.Text_color)
+
+				n = n + 1
 			}
 		} else {
-			// use station positions as polyline anchors
-			points := sw.gtfsStationPointsToShpLinePoints(trip.StopTimes)
-			parts := [][]shp.Point{points}
+			if trip.Shape != nil {
+				from := math.NaN()
+				to := math.NaN()
+				if len(trip.StopTimes) > 0 {
+					from = float64(trip.StopTimes[0].Shape_dist_traveled())
+					to = float64(trip.StopTimes[len(trip.StopTimes)-1].Shape_dist_traveled())
+				}
+				points := sw.gtfsShapePointsToShpLinePoints(trip.Shape.Points, from, to)
+				parts := [][]shp.Point{points}
 
-			shape.Write(shp.NewPolyLine(parts))
+				// prevent re-calcing of polylines for each trip
+				if val, ok := calcedShapes[trip.Shape.Id]; ok {
+					shape.Write(val)
+				} else {
+					calcedShapes[trip.Shape.Id] = shp.NewPolyLine(parts)
+					shape.Write(calcedShapes[trip.Shape.Id])
+				}
+			} else {
+				// use station positions as polyline anchors
+				points := sw.gtfsStationPointsToShpLinePoints(trip.StopTimes)
+				parts := [][]shp.Point{points}
+
+				shape.Write(shp.NewPolyLine(parts))
+			}
+			shape.WriteAttribute(n, 0, trip.Id)
+			if trip.Headsign != nil {
+				shape.WriteAttribute(n, 1, *trip.Headsign)
+			}
+			if trip.Short_name != nil {
+				shape.WriteAttribute(n, 2, *trip.Short_name)
+			}
+			shape.WriteAttribute(n, 3, trip.Direction_id)
+			if trip.Block_id != nil {
+				shape.WriteAttribute(n, 4, *trip.Block_id)
+			}
+			shape.WriteAttribute(n, 5, trip.Wheelchair_accessible)
+			shape.WriteAttribute(n, 6, trip.Bikes_allowed)
+			shape.WriteAttribute(n, 7, trip.Route.Short_name)
+			shape.WriteAttribute(n, 8, trip.Route.Long_name)
+			shape.WriteAttribute(n, 9, trip.Route.Desc)
+			shape.WriteAttribute(n, 10, trip.Route.Type)
+			shape.WriteAttribute(n, 11, trip.Route.Url)
+			shape.WriteAttribute(n, 12, trip.Route.Color)
+			shape.WriteAttribute(n, 13, trip.Route.Text_color)
+
+			n = n + 1
 		}
 
-		shape.WriteAttribute(n, 0, trip.Id)
-		shape.WriteAttribute(n, 1, trip.Headsign)
-		shape.WriteAttribute(n, 2, trip.Short_name)
-		shape.WriteAttribute(n, 3, trip.Direction_id)
-		shape.WriteAttribute(n, 4, trip.Block_id)
-		shape.WriteAttribute(n, 5, trip.Wheelchair_accessible)
-		shape.WriteAttribute(n, 6, trip.Bikes_allowed)
-		shape.WriteAttribute(n, 7, trip.Route.Short_name)
-		shape.WriteAttribute(n, 8, trip.Route.Long_name)
-		shape.WriteAttribute(n, 9, trip.Route.Desc)
-		shape.WriteAttribute(n, 10, trip.Route.Type)
-		shape.WriteAttribute(n, 11, trip.Route.Url)
-		shape.WriteAttribute(n, 12, trip.Route.Color)
-		shape.WriteAttribute(n, 13, trip.Route.Text_color)
-
-		n = n + 1
 	}
 
 	return n
@@ -332,6 +435,55 @@ func (sw *ShapeWriter) WriteShapes(f *gtfsparser.Feed, outFile string) int {
 		shape.WriteAttribute(n, 1, aggrShape.GetTripIdsString())
 		shape.WriteAttribute(n, 2, aggrShape.GetRouteIdsString())
 		shape.WriteAttribute(n, 3, aggrShape.GetShortNamesString())
+
+		n = n + 1
+	}
+
+	return n
+}
+
+// WriteTripStops writes the trip stops for a single trip
+func (sw *ShapeWriter) WriteTripStops(f *gtfsparser.Feed, tid string, outFile string) int {
+	shape, err := shp.Create(sw.getShapeFileNameTripStops(outFile), shp.POINT)
+
+	if err != nil {
+		panic(fmt.Sprintf("Could not open shapefile for writing (%s)", err))
+	}
+	defer shape.Close()
+
+	t, ok := f.Trips[tid]
+
+	if !ok {
+		panic(fmt.Sprintf("Trip not found:", tid))
+	}
+
+	n := 0
+
+	// get aggreshape map
+	shape.SetFields(sw.getFieldSizesForTripStops(t))
+
+	for _, st := range t.StopTimes {
+		stop := st.Stop()
+		point := sw.gtfsStopToShpPoint(stop)
+
+		shape.Write(point)
+
+		shape.WriteAttribute(n, 0, stop.Id)
+		shape.WriteAttribute(n, 1, stop.Code)
+		shape.WriteAttribute(n, 2, stop.Name)
+		shape.WriteAttribute(n, 3, stop.Desc)
+		shape.WriteAttribute(n, 4, stop.Zone_id)
+		shape.WriteAttribute(n, 5, stop.Url)
+		shape.WriteAttribute(n, 6, stop.Location_type)
+		shape.WriteAttribute(n, 7, stop.Parent_station)
+		shape.WriteAttribute(n, 8, stop.Timezone)
+		wb := int32(stop.Wheelchair_boarding)
+		shape.WriteAttribute(n, 9, wb)
+		seq := st.Sequence()
+		shape.WriteAttribute(n, 10, seq)
+		shape.WriteAttribute(n, 11, fmt.Sprintf("%02d:%02d:%02d", st.Arrival_time().Hour, st.Arrival_time().Minute, st.Arrival_time().Second))
+		shape.WriteAttribute(n, 12, fmt.Sprintf("%02d:%02d:%02d", st.Departure_time().Hour, st.Departure_time().Minute, st.Departure_time().Second))
+		shape.WriteAttribute(n, 13, float64(st.Shape_dist_traveled()))
 
 		n = n + 1
 	}
@@ -558,8 +710,8 @@ func (sw *ShapeWriter) gtfsStopToShpPoint(stop *gtfs.Stop) *shp.Point {
 }
 
 /**
- * Returns a shapefile geometry from a GTFS station list (if shapes are not available in the feed), reprojected
- */
+* Returns a shapefile geometry from a GTFS station list (if shapes are not available in the feed), reprojected
+*/
 func (sw *ShapeWriter) gtfsStationPointsToShpLinePoints(stoptimes gtfs.StopTimes) []shp.Point {
 	ret := make([]shp.Point, len(stoptimes))
 	for i, st := range stoptimes {
@@ -576,9 +728,82 @@ func (sw *ShapeWriter) gtfsStationPointsToShpLinePoints(stoptimes gtfs.StopTimes
 	return ret
 }
 
+func (sw *ShapeWriter) getFieldSizesForShape(shape *gtfs.Shape) []shp.Field {
+	idSize := uint8(0)
+
+	if uint8(min(254, len(shape.Id))) > idSize {
+		idSize = uint8(min(254, len(shape.Id)))
+	}
+
+	return []shp.Field{
+		shp.StringField(sw.fldName("Id"), idSize),
+		shp.FloatField(sw.fldName("DistTravFrom"), 64,10),
+		shp.FloatField(sw.fldName("DistTravTo"), 64,10),
+	}
+}
+
 /**
- * Calculate the optimal shapefile attribute field sizes to hold stop attributes
- */
+* Calculate the optimal shapefile attribute field sizes to hold trip stop attributes
+*/
+func (sw *ShapeWriter) getFieldSizesForTripStops(trip *gtfs.Trip) []shp.Field {
+	idSize := uint8(0)
+	codeSize := uint8(0)
+	nameSize := uint8(0)
+	descSize := uint8(0)
+	zoneIDSize := uint8(0)
+	urlSize := uint8(0)
+	parentStationSize := uint8(0)
+	timezoneSize := uint8(0)
+
+	for _, stopTimes := range trip.StopTimes {
+		st := stopTimes.Stop()
+		if uint8(min(254, len(st.Id))) > idSize {
+			idSize = uint8(min(254, len(st.Id)))
+		}
+		if uint8(min(254, len(st.Code))) > codeSize {
+			codeSize = uint8(min(254, len(st.Code)))
+		}
+		if uint8(min(254, len(st.Name))) > nameSize {
+			nameSize = uint8(min(254, len(st.Name)))
+		}
+		if uint8(min(254, len(st.Desc))) > descSize {
+			descSize = uint8(min(254, len(st.Desc)))
+		}
+		if uint8(min(254, len(st.Zone_id))) > zoneIDSize {
+			zoneIDSize = uint8(min(254, len(st.Zone_id)))
+		}
+		if st.Url != nil && uint8(min(254, len(st.Url.String()))) > urlSize {
+			urlSize = uint8(min(254, len(st.Url.String())))
+		}
+		if st.Parent_station != nil && uint8(min(254, len(st.Parent_station.Id))) > parentStationSize {
+			parentStationSize = uint8(min(254, len(st.Parent_station.Id)))
+		}
+		if uint8(min(254, len(st.Timezone.GetTzString()))) > timezoneSize {
+			timezoneSize = uint8(min(254, len(st.Timezone.GetTzString())))
+		}
+	}
+
+	return []shp.Field{
+		shp.StringField(sw.fldName("Id"), idSize),
+		shp.StringField(sw.fldName("Code"), codeSize),
+		shp.StringField(sw.fldName("Name"), nameSize),
+		shp.StringField(sw.fldName("Desc"), descSize),
+		shp.StringField(sw.fldName("Zone_id"), zoneIDSize),
+		shp.StringField(sw.fldName("Url"), urlSize),
+		shp.NumberField(sw.fldName("Location_type"), 1),
+		shp.StringField(sw.fldName("Parent_station"), parentStationSize),
+		shp.StringField(sw.fldName("Timezone"), timezoneSize),
+		shp.NumberField(sw.fldName("Wheelchair_boarding"), 32),
+		shp.NumberField(sw.fldName("Sequence"), 32),
+		shp.StringField(sw.fldName("Arrival"), 8),
+		shp.StringField(sw.fldName("Departure"), 8),
+		shp.FloatField(sw.fldName("ShapeDistTraveled"), 64, 10),
+	}
+}
+
+/**
+* Calculate the optimal shapefile attribute field sizes to hold stop attributes
+*/
 func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.Field {
 	idSize := uint8(0)
 	codeSize := uint8(0)
@@ -626,13 +851,13 @@ func (sw *ShapeWriter) getFieldSizesForStops(stops map[string]*gtfs.Stop) []shp.
 		shp.NumberField(sw.fldName("Location_type"), 1),
 		shp.StringField(sw.fldName("Parent_station"), parentStationSize),
 		shp.StringField(sw.fldName("Timezone"), timezoneSize),
-		shp.StringField(sw.fldName("Wheelchair_boarding"), 1),
+		shp.NumberField(sw.fldName("Wheelchair_boarding"), 32),
 	}
 }
 
 /**
- * Calculate the optimal shapefile attribute field sizes to hold trip/route fields
- */
+* Calculate the optimal shapefile attribute field sizes to hold trip/route fields
+*/
 func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.Field {
 	idSize := uint8(0)
 	headsignSize := uint8(0)
@@ -682,7 +907,7 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 		shp.StringField(sw.fldName("Id"), idSize),
 		shp.StringField(sw.fldName("Headsign"), headsignSize),
 		shp.StringField(sw.fldName("ShortName"), shortNameSize),
-		shp.NumberField(sw.fldName("Dir_id"), 1),
+		shp.NumberField(sw.fldName("Dir_id"), 16),
 		shp.StringField(sw.fldName("BlockId"), blockIDSize),
 		shp.NumberField(sw.fldName("Wheelchr_a"), 1),
 		shp.NumberField(sw.fldName("Bikes_alwd"), 1),
@@ -697,8 +922,8 @@ func (sw *ShapeWriter) getFieldSizesForTrips(trips map[string]*gtfs.Trip) []shp.
 }
 
 /**
- * Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
- */
+* Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
+*/
 func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []shp.Field {
 	idSize := uint8(0)
 	tIdsSize := uint8(0)
@@ -729,8 +954,8 @@ func (sw *ShapeWriter) getFieldSizesForShapes(shapes map[string]*AggrShape) []sh
 }
 
 /**
- * Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
- */
+* Calculate the optimal shapefile attribute field sizes to hold aggregated trip/route fields
+*/
 func (sw *ShapeWriter) getFieldSizesForRouteShapes(shapes map[string]*AggrShape, typeMap map[int16]string, routeAddFlds []string, f *gtfsparser.Feed) []shp.Field {
 	idSize := uint8(0)
 	shortNameSize := uint8(0)
@@ -809,9 +1034,17 @@ func (sw *ShapeWriter) fldName(f string) string {
 	return f
 }
 
+func (sw *ShapeWriter) getTripShapeFileName(in string) string {
+	name := filepath.Base(in)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	name = fmt.Sprint(name, ".shape.shp")
+	name = filepath.Join(filepath.Dir(in), name)
+	return name
+}
+
 /**
- * Return the sanitized output file name from the user-provided output file
- */
+* Return the sanitized output file name from the user-provided output file
+*/
 func (sw *ShapeWriter) getShapeFileName(in string) string {
 	name := filepath.Base(in)
 	name = strings.TrimSuffix(name, filepath.Ext(name))
@@ -821,8 +1054,8 @@ func (sw *ShapeWriter) getShapeFileName(in string) string {
 }
 
 /**
- * Return the sanitized stations output file name from the user-provided output file
- */
+* Return the sanitized stations output file name from the user-provided output file
+*/
 func (sw *ShapeWriter) getShapeFileNameStations(in string) string {
 	name := filepath.Base(in)
 	name = strings.TrimSuffix(name, filepath.Ext(name))
@@ -832,8 +1065,19 @@ func (sw *ShapeWriter) getShapeFileNameStations(in string) string {
 }
 
 /**
- * Return the sanitized aggregate CSV output file name from the user-provided output file
- */
+* Return the sanitized trip stations output file name from the user-provided output file
+*/
+func (sw *ShapeWriter) getShapeFileNameTripStops(in string) string {
+	name := filepath.Base(in)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	name = fmt.Sprint(name, ".stops.shp")
+	name = filepath.Join(filepath.Dir(in), name)
+	return name
+}
+
+/**
+* Return the sanitized aggregate CSV output file name from the user-provided output file
+*/
 func (sw *ShapeWriter) getCsvFileName(in string) string {
 	name := filepath.Base(in)
 	name = strings.TrimSuffix(name, filepath.Ext(name))

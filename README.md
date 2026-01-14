@@ -10,7 +10,7 @@ Creation of this tool was supported by [geOps, Freiburg](http://geops.de/).
 
 ## Installation
 
-    $ go get github.com/patrickbr/gtfs2shp
+    $ go install github.com/patrickbr/gtfs2shp@latest
 
 Requires golang version >= 1.7.
 
